@@ -1,0 +1,905 @@
+---
+title: "Geographical Analysis of media"
+subtitle: "7. Textmodels"
+author: "Claude Grasland"
+format: html
+self-contained: true
+---
+
+
+```{r setup7, echo = FALSE, comment = FALSE, warning = FALSE, message = FALSE}
+knitr::opts_chunk$set(echo = TRUE, comment = FALSE, warning = FALSE)
+#library(sf)
+#library(plotly)
+library(RColorBrewer)
+library(data.table)
+library(dplyr)
+library(knitr)
+library(htmlwidgets)
+
+library(quanteda)
+library(quanteda.textplots)
+library(quanteda.textstats)
+library(tidytext)
+library(stringr)
+
+library(FactoMineR)
+
+
+#library(tidygraph)
+#library(ggraph)
+#library(visNetwork)
+```
+
+
+## Objectives
+
+The aim of this section is to test basic methods of textual analysis for the analysis of vocabulary associated to the different macroregions. The question is how it is possible to apply these models in the different languages of our corpora and what are the issues for a genuine comparison. We will focus on the case of the difference of vocabulary for the two macroregional entities "EU" and "Europe" but try also some experiments with "NATO" or "Mediterranean".
+
+
+## Preparation
+
+### Load quanteda annotated corpus
+
+We load the quanteda annotated corpus and split it by media 
+
+
+```{r}
+qd<-readRDS("corpus/qd_mycorpus_geo_top.RDS")
+qd_fr <- corpus_subset(qd, who=="FRA_figaro")
+qd_de <- corpus_subset(qd, who=="DEU_suddeu")
+qd_tr <- corpus_subset(qd, who=="TUR_dunya")
+qd_tn <- corpus_subset(qd, who=="TUN_afrman")
+td<-tidy(qd)
+```
+
+
+### Extract subcorpora of international  news
+
+We extract corpus and subcorpus of news where at least one state or one region are mentionned.
+
+```{r}
+qd_int <- corpus_subset(qd, nbgeo >0)
+qd_int_fr <- corpus_subset(qd_int, who=="FRA_figaro")
+qd_int_de <- corpus_subset(qd_int, who=="DEU_suddeu")
+qd_int_tr <- corpus_subset(qd_int, who=="TUR_dunya")
+qd_int_tn <- corpus_subset(qd_int, who=="TUN_afrman")
+```
+
+
+### Extract subcorpora of macroregional  news
+
+We extract corpus and subcorpus of news where at least one state or one region are mentionned.
+
+```{r}
+qd_reg <- corpus_subset(qd, nbregions >0)
+qd_reg_fr <- corpus_subset(qd_reg, who=="FRA_figaro")
+qd_reg_de <- corpus_subset(qd_reg, who=="DEU_suddeu")
+qd_reg_tr <- corpus_subset(qd_reg, who=="TUR_dunya")
+qd_reg_tn <- corpus_subset(qd_reg, who=="TUN_afrman")
+```
+
+
+
+## ANALYSIS 1 : WORDCLOUD OF MACROREGIONAL VOCABULARY
+
+We consider firstly the vocablary of news associated to macroregion by our dictionary in order to discover if we can define a "macroregional vocabulary"
+
+
+### Tunisia / African Manager
+
+```{r}
+sel<-qd_reg_tn
+sel<-gsub(pattern = "'"," ",sel)
+sel<-gsub(pattern = "’"," ",sel)
+sel<-gsub(pattern = "-"," ",sel)
+sel<-gsub(pattern = "Union Européenne","UE",sel)
+sel<-gsub(pattern = "Union européenne","UE",sel)
+sel<-gsub(pattern = "Tunisie"," ",sel)
+stopw<-stopwords("fr", source = "stopwords-iso")
+dfm<- corpus_subset(sel) %>% 
+    dfm(remove = stopw, remove_punct = TRUE, tolower=F) %>%
+    dfm_trim(min_termfreq = 10, verbose = FALSE)
+set.seed(100)
+textplot_wordcloud(dfm,max_words = 100,min_size=1, max_size=10, rotation=0)
+```
+
+
+### France /+ Le Figaro
+
+```{r}
+sel<-qd_reg_fr
+sel<-gsub(pattern = "'"," ",sel)
+sel<-gsub(pattern = "’"," ",sel)
+sel<-gsub(pattern = "-"," ",sel)
+sel<-gsub(pattern = "Union Européenne","UE",sel)
+sel<-gsub(pattern = "Union européenne","UE",sel)
+sel<-gsub(pattern = "France"," ",sel)
+stopw<-stopwords("fr", source = "stopwords-iso")
+dfm<- corpus_subset(sel) %>% 
+    dfm(remove = stopw, remove_punct = TRUE, tolower=F) %>%
+    dfm_trim(min_termfreq = 10, verbose = FALSE,)
+set.seed(100)
+textplot_wordcloud(dfm,max_words = 100,min_size=1, max_size=12, rotation=0)
+```
+
+
+### Germany / Süddeutsche Zeitung
+
+```{r}
+sel<-qd_reg_de
+sel<-gsub(pattern = "'"," ",sel)
+sel<-gsub(pattern = "’"," ",sel)
+sel<-gsub(pattern = "-"," ",sel)
+sel<-gsub(pattern = "Europas","Europa",sel)
+sel<-gsub(pattern = "Europäische Union","UE",sel)
+sel<-gsub(pattern = "Deutschland"," ",sel)
+stopw<-stopwords("de", source = "stopwords-iso")
+dfm<- corpus_subset(sel) %>% 
+    dfm(remove = stopw, remove_punct = TRUE, tolower=F) %>%
+    dfm_trim(min_termfreq = 10, verbose = FALSE,)
+set.seed(100)
+textplot_wordcloud(dfm,max_words = 100,min_size=1, max_size=12, rotation=0)
+```
+
+### Turkey / Dunya
+
+```{r}
+sel<-qd_reg_tr
+sel<-gsub(pattern = "'"," ",sel)
+sel<-gsub(pattern = "’"," ",sel)
+sel<-gsub(pattern = "-"," ",sel)
+sel<-gsub(pattern = "Avrupa Birliği","AB",sel)
+sel<-gsub(pattern = "Türkiye"," ",sel)
+stopw<-stopwords("tr", source = "stopwords-iso")
+dfm<- corpus_subset(sel) %>% 
+    dfm(remove = stopw, remove_punct = TRUE, tolower=F) %>%
+    dfm_trim(min_termfreq = 10, verbose = FALSE,)
+set.seed(100)
+textplot_wordcloud(dfm,max_words = 100,min_size=1, max_size=10, rotation=0)
+td<-tidy(sel)
+
+```
+
+
+
+## ANALYSIS 2.1 : SPECIFIC VOCABULARY OF A MACROREGION / AFRICA
+
+We take the example of "Africa" and examine what are the specific terms associated to this macroregion in the different corpora and subcorpora. We decide to use the "international" corpus as reference.
+
+
+### Tunisia
+
+```{r}
+# Select the corpus 
+sel <- qd_int_tn
+sel<-gsub(pattern = "'"," ",sel)
+sel<-gsub(pattern = "’"," ",sel)
+sel<-gsub(pattern = "-"," ",sel)
+sel<-gsub(pattern = "Union Européenne","UE",sel)
+sel<-gsub(pattern = "Union européenne","UE",sel)
+sel<-gsub(pattern = "Moyen Orient","Moyen_Orient",sel)
+sel<-gsub(pattern = "Wall Street","Wall_Street",sel)
+
+# Select a macroegion
+sel$ref <- str_detect(sel$geo,"CO_AFR")
+table(sel$ref)
+
+# Create a dfm grouped by presence/absence of the macroregion
+pres_dfm <- tokens(sel, remove_punct = TRUE) %>%
+  tokens_remove(stopwords("fr", source = "stopwords-iso")) %>%
+  tokens_remove(c("Afrique","2ème","3e","Orange")) %>%
+  tokens_group(groups = ref) %>%
+  dfm(tolower=F) %>%
+  dfm_trim(min_termfreq = 20, verbose = FALSE)
+# Calculate keyness and determine Trump as target group
+result_keyness <- textstat_keyness(pres_dfm, target = "TRUE")
+
+# Plot estimated word keyness
+textplot_keyness(result_keyness,min_count = 20,n = 20,show_reference = T)
+td<-tidy(sel)
+```
+
+### France
+
+```{r}
+# Select the corpus 
+sel <- qd_int_fr
+sel<-gsub(pattern = "'"," ",sel)
+sel<-gsub(pattern = "’"," ",sel)
+sel<-gsub(pattern = "-"," ",sel)
+sel<-gsub(pattern = "Union Européenne","UE",sel)
+sel<-gsub(pattern = "Union européenne","UE",sel)
+sel<-gsub(pattern = "Moyen Orient","Moyen_Orient",sel)
+sel<-gsub(pattern = "Wall Street","Wall_Street",sel)
+
+
+# Select a macroegion
+sel$ref <- str_detect(sel$geo,"CO_AFR")
+table(sel$ref)
+
+# Create a dfm grouped by presence/absence of the macroregion
+pres_dfm <- tokens(sel, remove_punct = TRUE) %>%
+  tokens_remove(stopwords("fr", source = "stopwords-iso")) %>%
+  tokens_remove(c("Afrique","2ème","3e","19")) %>%
+  tokens_group(groups = ref) %>%
+  dfm(tolower=F) %>%
+  dfm_trim(min_termfreq = 20, verbose = FALSE)
+# Calculate keyness and determine Trump as target group
+result_keyness <- textstat_keyness(pres_dfm, target = "TRUE")
+
+# Plot estimated word keyness
+textplot_keyness(result_keyness,min_count = 20,n = 20,show_reference = T)
+td<-tidy(sel)
+```
+
+
+### Germany
+
+```{r}
+# Select the corpus 
+sel <- qd_int_de
+sel<-gsub(pattern = "'"," ",sel)
+sel<-gsub(pattern = "’"," ",sel)
+sel<-gsub(pattern = "-"," ",sel)
+sel<-gsub(pattern = "Europas","Europa",sel)
+sel<-gsub(pattern = "Europäische Union","UE",sel)
+stopw<-stopwords("de", source = "stopwords-iso")
+
+
+# Select a macroegion
+sel$ref <- str_detect(sel$geo,"CO_AFR")
+table(sel$ref)
+
+# Create a dfm grouped by presence/absence of the macroregion
+pres_dfm <- tokens(sel, remove_punct = TRUE) %>%
+  tokens_remove(stopw) %>%
+  tokens_remove(c("Afrika")) %>%
+  tokens_group(groups = ref) %>%
+  dfm(tolower=F) %>%
+  dfm_trim(min_termfreq = 20, verbose = FALSE)
+# Calculate keyness and determine Trump as target group
+result_keyness <- textstat_keyness(pres_dfm, target = "TRUE")
+
+# Plot estimated word keyness
+textplot_keyness(result_keyness,min_count = 20,n = 20,show_reference = T)
+td<-tidy(sel)
+```
+
+
+### Turkey
+
+```{r}
+# Select the corpus 
+sel <- qd_int_tr
+sel<-qd_reg_tr
+sel<-gsub(pattern = "'"," ",sel)
+sel<-gsub(pattern = "’"," ",sel)
+sel<-gsub(pattern = "-"," ",sel)
+sel<-gsub(pattern = "Avrupa Birliği","AB",sel)
+sel<-gsub(pattern = "Güney Afrika","Güney_Afrika",sel)
+sel<-gsub(pattern = "Recep Tayyip Erdoğan","Erdoğan",sel)
+stopw<-stopwords("tr", source = "stopwords-iso")
+
+
+# Select a macroegion
+sel$ref <- str_detect(sel$geo,"CO_AFR")
+table(sel$ref)
+
+# Create a dfm grouped by presence/absence of the macroregion
+pres_dfm <- tokens(sel, remove_punct = TRUE) %>%
+  tokens_remove(stopw) %>%
+  tokens_remove(c("Afrika","Güney_Afrika")) %>%
+  tokens_group(groups = ref) %>%
+  dfm(tolower=F) %>%
+  dfm_trim(min_termfreq = 20, verbose = FALSE)
+# Calculate keyness and determine Trump as target group
+result_keyness <- textstat_keyness(pres_dfm, target = "TRUE")
+
+# Plot estimated word keyness
+textplot_keyness(result_keyness,min_count = 20,n = 20,show_reference = T)
+td<-tidy(sel)
+```
+
+
+
+## ANALYSIS 2.2 : SPECIFIC VOCABULARY OF A MACROREGION / MEDITERRANEAN
+
+We take now the example of "Mediterranean" and examine what are the specific terms associated to this macroregion in the different corpora and subcorpora. We decide to use the "international" corpus as reference.
+
+
+### Tunisia
+
+```{r}
+# Select the corpus 
+sel <- qd_int_tn
+sel<-gsub(pattern = "'"," ",sel)
+sel<-gsub(pattern = "’"," ",sel)
+sel<-gsub(pattern = "-"," ",sel)
+sel<-gsub(pattern = "Union Européenne","UE",sel)
+sel<-gsub(pattern = "Union européenne","UE",sel)
+sel<-gsub(pattern = "Moyen Orient","Moyen_Orient",sel)
+sel<-gsub(pattern = "Wall Street","Wall_Street",sel)
+
+# Select a macroegion
+sel$ref <- str_detect(sel$geo,"SE_medit")
+table(sel$ref)
+
+# Create a dfm grouped by presence/absence of the macroregion
+pres_dfm <- tokens(sel, remove_punct = TRUE) %>%
+  tokens_remove(stopwords("fr", source = "stopwords-iso")) %>%
+  tokens_remove(c("Méditerranée","2ème","3e","Orange","5")) %>%
+  tokens_group(groups = ref) %>%
+  dfm(tolower=F) %>%
+  dfm_trim(min_termfreq = 20, verbose = FALSE)
+# Calculate keyness and determine Trump as target group
+result_keyness <- textstat_keyness(pres_dfm, target = "TRUE")
+
+# Plot estimated word keyness
+textplot_keyness(result_keyness,min_count = 20,n = 25,show_reference = F)
+td<-tidy(sel)
+```
+
+### France
+
+```{r}
+# Select the corpus 
+sel <- qd_int_fr
+sel<-gsub(pattern = "'"," ",sel)
+sel<-gsub(pattern = "’"," ",sel)
+sel<-gsub(pattern = "-"," ",sel)
+sel<-gsub(pattern = "Union Européenne","UE",sel)
+sel<-gsub(pattern = "Union européenne","UE",sel)
+sel<-gsub(pattern = "SOS Méditerranée","SOS_Méditerranée",sel)
+sel<-gsub(pattern = "Ocean Viking","Ocean_Viking",sel)
+
+
+# Select a macroegion
+sel$ref <- str_detect(sel$geo,"SE_medit")
+table(sel$ref)
+
+# Create a dfm grouped by presence/absence of the macroregion
+pres_dfm <- tokens(sel, remove_punct = TRUE) %>%
+  tokens_remove(stopwords("fr", source = "stopwords-iso")) %>%
+  tokens_remove(c("Méditerranée","2ème","3e","19")) %>%
+  tokens_group(groups = ref) %>%
+  dfm(tolower=F) %>%
+  dfm_trim(min_termfreq = 20, verbose = FALSE)
+# Calculate keyness and determine Trump as target group
+result_keyness <- textstat_keyness(pres_dfm, target = "TRUE")
+
+# Plot estimated word keyness
+textplot_keyness(result_keyness,min_count = 20,n = 20,show_reference = F)
+td<-tidy(sel)
+```
+
+
+### Germany
+
+```{r}
+# Select the corpus 
+sel <- qd_int_de
+sel<-gsub(pattern = "'"," ",sel)
+sel<-gsub(pattern = "’"," ",sel)
+sel<-gsub(pattern = "-"," ",sel)
+sel<-gsub(pattern = "Europas","Europa",sel)
+sel<-gsub(pattern = "Europäische Union","UE",sel)
+stopw<-stopwords("de", source = "stopwords-iso")
+
+
+# Select a macroegion
+sel$ref <- str_detect(sel$geo,"SE_medit")
+table(sel$ref)
+
+# Create a dfm grouped by presence/absence of the macroregion
+pres_dfm <- tokens(sel, remove_punct = TRUE) %>%
+  tokens_remove(stopw) %>%
+  tokens_remove(c("Mittelmeer","3","100")) %>%
+  tokens_group(groups = ref) %>%
+  dfm(tolower=F) %>%
+  dfm_trim(min_termfreq = 20, verbose = FALSE)
+# Calculate keyness and determine Trump as target group
+result_keyness <- textstat_keyness(pres_dfm, target = "TRUE")
+
+# Plot estimated word keyness
+textplot_keyness(result_keyness,min_count = 20,n = 20,show_reference = F)
+td<-tidy(sel)
+```
+
+
+### Turkey
+
+```{r}
+# Select the corpus 
+sel <- qd_int_tr
+sel<-qd_reg_tr
+sel<-gsub(pattern = "'"," ",sel)
+sel<-gsub(pattern = "’"," ",sel)
+sel<-gsub(pattern = "-"," ",sel)
+sel<-gsub(pattern = "Avrupa Birliği","AB",sel)
+sel<-gsub(pattern = "Güney Afrika","Güney_Afrika",sel)
+sel<-gsub(pattern = "Recep Tayyip Erdoğan","Erdoğan",sel)
+stopw<-stopwords("tr", source = "stopwords-iso")
+
+
+# Select a macroegion
+sel$ref <- str_detect(sel$geo,"SE_medit")
+table(sel$ref)
+
+# Create a dfm grouped by presence/absence of the macroregion
+pres_dfm <- tokens(sel, remove_punct = TRUE) %>%
+  tokens_remove(stopw) %>%
+  tokens_remove(c("Akdeniz")) %>%
+  tokens_group(groups = ref) %>%
+  dfm(tolower=T) %>%
+  dfm_trim(min_termfreq = 20, verbose = FALSE)
+# Calculate keyness and determine Trump as target group
+result_keyness <- textstat_keyness(pres_dfm, target = "TRUE")
+
+# Plot estimated word keyness
+textplot_keyness(result_keyness,min_count = 20,n = 20,show_reference = F)
+td<-tidy(sel)
+```
+
+
+
+## ANALYSIS 3.1 : SPECIFIC VOCABULARY OF TWO REGIONS : EU  / EUrope
+
+We take now the example of the two regions EU and Europe for a benchmarking of their respective vocabulary. We keep the international corpus as referenc
+
+
+### Tunisia
+
+```{r}
+# Select the corpus 
+sel<-qd_int_tn
+sel<-gsub(pattern = "'"," ",sel)
+sel<-gsub(pattern = "’"," ",sel)
+sel<-gsub(pattern = "-"," ",sel)
+sel<-gsub(pattern = "Union Européenne","UE",sel)
+sel<-gsub(pattern = "Union européenne","UE",sel)
+sel<-gsub(pattern = "Moyen Orient","Moyen_Orient",sel)
+sel<-gsub(pattern = "Wall Street","Wall_Street",sel)
+
+# Select news located in one of the two macroregions but not both
+sel$ref1 <- str_detect(sel$geo,"OR_EU")
+sel$ref2 <- str_detect(sel$geo,"CO_EUR")
+sel<-corpus_subset(sel,(sel$ref1 | sel$ref2) & (sel$ref1!=sel$ref2))
+sel$ref<-as.factor(sel$ref1)
+levels(sel$ref) <- c("Europe","EU")
+
+# Create a dfm grouped by presence/absence of the macroregion
+pres_dfm <- tokens(sel, remove_punct = TRUE) %>%
+  tokens_remove(stopwords("fr", source = "stopwords-iso")) %>%
+  tokens_remove(c("Europe","UE","19","2019")) %>%
+  tokens_group(groups = ref) %>%
+  dfm(tolower=F) %>%
+  dfm_trim(min_termfreq = 10, verbose = FALSE)
+# Calculate keyness and determine Trump as target group
+result_keyness <- textstat_keyness(pres_dfm, sel = "EU")
+
+# Plot estimated word keyness
+textplot_keyness(result_keyness,min_count = 10,n = 20,show_reference = T)
+td<-tidy(sel)
+```
+
+### France
+
+```{r}
+# Select the corpus 
+sel <- qd_int_fr
+sel<-gsub(pattern = "'"," ",sel)
+sel<-gsub(pattern = "’"," ",sel)
+sel<-gsub(pattern = "-"," ",sel)
+sel<-gsub(pattern = "Union Européenne","UE",sel)
+sel<-gsub(pattern = "Union européenne","UE",sel)
+sel<-gsub(pattern = "Etats Unis","USA",sel)
+sel<-gsub(pattern = "États Unis","USA",sel)
+sel<-gsub(pattern = "SOS Méditerranée","SOS_Méditerranée",sel)
+sel<-gsub(pattern = "Ocean Viking","Ocean_Viking",sel)
+sel<-gsub(pattern = "Emmanuel Macron","Macron",sel)
+
+# Select news located in one of the two macroregions but not both
+sel$ref1 <- str_detect(sel$geo,"OR_EU")
+sel$ref2 <- str_detect(sel$geo,"CO_EUR")
+sel<-corpus_subset(sel,(sel$ref1 | sel$ref2) & (sel$ref1!=sel$ref2))
+sel$ref<-as.factor(sel$ref1)
+levels(sel$ref) <- c("Europe","EU")
+
+# Create a dfm grouped by presence/absence of the macroregion
+pres_dfm <- tokens(sel, remove_punct = TRUE) %>%
+  tokens_remove(stopwords("fr", source = "stopwords-iso")) %>%
+  tokens_remove(c("Europe","UE","19","2019","27","°")) %>%
+  tokens_group(groups = ref) %>%
+  dfm(tolower=F) %>%
+  dfm_trim(min_termfreq = 20, verbose = FALSE)
+# Calculate keyness and determine Trump as target group
+result_keyness <- textstat_keyness(pres_dfm, sel = "EU")
+
+# Plot estimated word keyness
+textplot_keyness(result_keyness,min_count = 20,n = 20,show_reference = T)
+td<-tidy(sel)
+```
+
+
+### Germany
+
+```{r}
+# Select the corpus 
+sel <- qd_int_de
+sel<-gsub(pattern = "'"," ",sel)
+sel<-gsub(pattern = "’"," ",sel)
+sel<-gsub(pattern = "-"," ",sel)
+sel<-gsub(pattern = "Europas","Europa",sel)
+sel<-gsub(pattern = "Europäische Union","UE",sel)
+stopw<-stopwords("de", source = "stopwords-iso")
+
+
+# Select news located in one of the two macroregions but not both
+sel$ref1 <- str_detect(sel$geo,"OR_EU")
+sel$ref2 <- str_detect(sel$geo,"CO_EUR")
+sel<-corpus_subset(sel,(sel$ref1 | sel$ref2) & (sel$ref1!=sel$ref2))
+sel$ref<-as.factor(sel$ref1)
+levels(sel$ref) <- c("Europe","EU")
+
+# Create a dfm grouped by presence/absence of the macroregion
+pres_dfm <- tokens(sel, remove_punct = TRUE) %>%
+  tokens_remove(stopw) %>%
+  tokens_remove(c("Europa","EU","3","100")) %>%
+  tokens_group(groups = ref) %>%
+  dfm(tolower=F) %>%
+  dfm_trim(min_termfreq = 20, verbose = FALSE)
+# Calculate keyness and determine Trump as target group
+result_keyness <- textstat_keyness(pres_dfm, sel="Europe")
+
+# Plot estimated word keyness
+textplot_keyness(result_keyness,min_count = 20,n = 20,show_reference = T)
+td<-tidy(sel)
+```
+
+
+### Turkey
+
+```{r}
+# Select the corpus 
+sel <- qd_int_tr
+sel<-qd_reg_tr
+sel<-gsub(pattern = "'"," ",sel)
+sel<-gsub(pattern = "’"," ",sel)
+sel<-gsub(pattern = "-"," ",sel)
+sel<-gsub(pattern = "Avrupa Birliği","AB",sel)
+sel<-gsub(pattern = "Güney Afrika","Güney_Afrika",sel)
+sel<-gsub(pattern = "Recep Tayyip Erdoğan","Erdoğan",sel)
+sel<-gsub(pattern = "Christine Lagarde","Christine_Lagarde",sel)
+sel<-gsub(pattern = "Avrupa Merkez Bankası","ECB",sel)
+sel<-gsub(pattern = "Avrupa Merkez Bankasi","ECB",sel)
+sel<-gsub(pattern = "Avrupa İmar ve Kalkınma Bankası","EBRD",sel)
+stopw<-stopwords("tr", source = "stopwords-iso")
+
+# Select news located in one of the two macroregions but not both
+sel$ref1 <- str_detect(sel$geo,"OR_EU")
+sel$ref2 <- str_detect(sel$geo,"CO_EUR")
+sel<-corpus_subset(sel,(sel$ref1 | sel$ref2) & (sel$ref1!=sel$ref2))
+sel$ref<-as.factor(sel$ref1)
+levels(sel$ref) <- c("Europe","EU")
+
+
+# Create a dfm grouped by presence/absence of the macroregion
+pres_dfm <- tokens(sel, remove_punct = TRUE) %>%
+  tokens_remove(stopw) %>%
+  tokens_remove(c("Avrupa","AB","den","nın","nin","ye")) %>%
+  tokens_group(groups = ref) %>%
+  dfm(tolower=F) %>%
+  dfm_trim(min_termfreq = 20, verbose = FALSE)
+# Calculate keyness and determine Trump as target group
+result_keyness <- textstat_keyness(pres_dfm, sel="Europe")
+
+# Plot estimated word keyness
+textplot_keyness(result_keyness,min_count = 20,n = 20,show_reference = T)
+td<-tidy(sel)
+```
+
+
+
+## ANALYSIS 3.2 : SPECIFIC VOCABULARY OF ONE REGION BY PERIOD : EU in 2018-19 & 2022_2023
+
+We take now the example of the two regions EU and Europe for a benchmarking of their respective vocabulary. We keep the international corpus as referenc
+
+
+### Tunisia
+
+```{r}
+# Select the corpus 
+sel<-qd_int_tn
+sel<-gsub(pattern = "'"," ",sel)
+sel<-gsub(pattern = "’"," ",sel)
+sel<-gsub(pattern = "-"," ",sel)
+sel<-gsub(pattern = "Union Européenne","UE",sel)
+sel<-gsub(pattern = "Union européenne","UE",sel)
+sel<-gsub(pattern = "Moyen Orient","Moyen_Orient",sel)
+sel<-gsub(pattern = "Wall Street","Wall_Street",sel)
+sel<-gsub(pattern = "liste noire","liste_noire",sel)
+
+# Select news located in EU within the two periods
+sel<-corpus_subset(sel,str_detect(sel$geo,"OR_EU"))
+sel$ref<-cut(sel$day,breaks=as.Date(c("2018-01-01","2020-01-01","2022-01-01","2024-01-01")))
+levels(sel$ref) <-c("2018-19","2020-21","2022-23")
+sel<-corpus_subset(sel,ref != "2020-21")
+sel$ref<-as.factor(as.character(sel$ref))
+table(sel$ref)
+
+# Create a dfm grouped by presence/absence of the macroregion
+pres_dfm <- tokens(sel, remove_punct = TRUE) %>%
+  tokens_remove(stopwords("fr", source = "stopwords-iso")) %>%
+tokens_remove(c("Europe","UE","19","2019","150")) %>%
+  tokens_group(groups = ref) %>%
+  dfm(tolower=F) %>%
+  dfm_trim(min_termfreq = 5, verbose = FALSE)
+# Calculate keyness and determine Trump as target group
+result_keyness <- textstat_keyness(pres_dfm, sel = "2018-19")
+
+# Plot estimated word keyness
+textplot_keyness(result_keyness,min_count = 5,n = 20,show_reference = T)
+td<-tidy(sel)
+```
+
+### France
+
+```{r}
+# Select the corpus 
+sel <- qd_int_fr
+sel<-gsub(pattern = "'"," ",sel)
+sel<-gsub(pattern = "’"," ",sel)
+sel<-gsub(pattern = "-"," ",sel)
+sel<-gsub(pattern = "Union Européenne","UE",sel)
+sel<-gsub(pattern = "Union européenne","UE",sel)
+sel<-gsub(pattern = "Etats Unis","USA",sel)
+sel<-gsub(pattern = "États Unis","USA",sel)
+sel<-gsub(pattern = "SOS Méditerranée","SOS_Méditerranée",sel)
+sel<-gsub(pattern = "Ocean Viking","Ocean_Viking",sel)
+sel<-gsub(pattern = "Emmanuel Macron","Macron",sel)
+sel<-gsub(pattern = "Royaume Uni","Royaume_Uni",sel)
+sel<-gsub(pattern = "von der Leyen","VDLeyen",sel)
+sel<-gsub(pattern = "Von der Leyen","VDLeyen",sel)
+sel<-gsub(pattern = "Theresa May","T_May",sel)
+
+# Select news located in EU within the two periods
+sel<-corpus_subset(sel,str_detect(sel$geo,"OR_EU"))
+sel$ref<-cut(sel$day,breaks=as.Date(c("2018-01-01","2020-01-01","2022-01-01","2024-01-01")))
+levels(sel$ref) <-c("2018-19","2020-21","2022-23")
+sel<-corpus_subset(sel,ref != "2020-21")
+sel$ref<-as.factor(as.character(sel$ref))
+table(sel$ref)
+
+# Create a dfm grouped by presence/absence of the macroregion
+pres_dfm <- tokens(sel, remove_punct = TRUE) %>%
+  tokens_remove(stopwords("fr", source = "stopwords-iso")) %>%
+  tokens_remove(c("UE","19","2019","27","°","ans","2023")) %>%
+  tokens_group(groups = ref) %>%
+  dfm(tolower=F) %>%
+  dfm_trim(min_termfreq = 10, verbose = FALSE)
+# Calculate keyness and determine Trump as target group
+result_keyness <- textstat_keyness(pres_dfm, sel = "2018-19")
+
+# Plot estimated word keyness
+textplot_keyness(result_keyness,min_count = 10,n = 20,show_reference = T)
+td<-tidy(sel)
+```
+
+
+### Germany
+
+```{r}
+# Select the corpus 
+sel <- qd_int_de
+sel<-gsub(pattern = "'"," ",sel)
+sel<-gsub(pattern = "’"," ",sel)
+sel<-gsub(pattern = "-"," ",sel)
+sel<-gsub(pattern = "Europas","Europa",sel)
+sel<-gsub(pattern = "Europäische Union","EU",sel)
+stopw<-stopwords("de", source = "stopwords-iso")
+
+
+
+# Select news located in EU within the two periods
+sel<-corpus_subset(sel,str_detect(sel$geo,"OR_EU"))
+sel$ref<-cut(sel$day,breaks=as.Date(c("2018-01-01","2020-01-01","2022-01-01","2024-01-01")))
+levels(sel$ref) <-c("2018-19","2020-21","2022-23")
+sel<-corpus_subset(sel,ref != "2020-21")
+sel$ref<-as.factor(as.character(sel$ref))
+table(sel$ref)
+
+# Create a dfm grouped by presence/absence of the macroregion
+pres_dfm <- tokens(sel, remove_punct = TRUE) %>%
+  tokens_remove(stopw) %>%
+  tokens_remove(c("EU","3","100")) %>%
+  tokens_group(groups = ref) %>%
+  dfm(tolower=F) %>%
+  dfm_trim(min_termfreq = 10, verbose = FALSE)
+# Calculate keyness and determine Trump as target group
+result_keyness <- textstat_keyness(pres_dfm, sel="2018-19")
+
+# Plot estimated word keyness
+textplot_keyness(result_keyness,min_count = 10,n = 20,show_reference = T)
+td<-tidy(sel)
+```
+
+
+### Turkey
+
+```{r}
+# Select the corpus 
+sel <- qd_int_tr
+sel<-qd_reg_tr
+sel<-gsub(pattern = "'"," ",sel)
+sel<-gsub(pattern = "’"," ",sel)
+sel<-gsub(pattern = "-"," ",sel)
+sel<-gsub(pattern = "Avrupa Birliği","AB",sel)
+sel<-gsub(pattern = "Güney Afrika","Güney_Afrika",sel)
+sel<-gsub(pattern = "Recep Tayyip Erdoğan","Erdoğan",sel)
+sel<-gsub(pattern = "Christine Lagarde","Christine_Lagarde",sel)
+sel<-gsub(pattern = "Avrupa Merkez Bankası","ECB",sel)
+sel<-gsub(pattern = "Avrupa Merkez Bankasi","ECB",sel)
+sel<-gsub(pattern = "Avrupa İmar ve Kalkınma Bankası","EBRD",sel)
+sel<-gsub(pattern = "Ursula von der Leyen","VDLeyen",sel)
+stopw<-stopwords("tr", source = "stopwords-iso")
+
+# Select news located in EU within the two periods
+sel<-corpus_subset(sel,str_detect(sel$geo,"OR_EU"))
+sel$ref<-cut(sel$day,breaks=as.Date(c("2018-01-01","2020-01-01","2022-01-01","2024-01-01")))
+levels(sel$ref) <-c("2018-19","2020-21","2022-23")
+sel<-corpus_subset(sel,ref != "2020-21")
+sel$ref<-as.factor(as.character(sel$ref))
+table(sel$ref)
+
+
+# Create a dfm grouped by presence/absence of the macroregion
+pres_dfm <- tokens(sel, remove_punct = TRUE) %>%
+  tokens_remove(stopw) %>%
+  tokens_remove(c("AB","den","nın","nin","ye","2022","2021","3","e")) %>%
+  tokens_group(groups = ref) %>%
+  dfm(tolower=F) %>%
+  dfm_trim(min_termfreq = 10, verbose = FALSE)
+# Calculate keyness and determine Trump as target group
+result_keyness <- textstat_keyness(pres_dfm, sel="2018-19")
+
+# Plot estimated word keyness
+textplot_keyness(result_keyness,min_count = 10,n = 20,show_reference = T)
+td<-tidy(sel)
+```
+
+## ANALYSIS 4 : INDUCTIVE TIME DIVISION
+
+The object of this section is to define time periods in an inductive way (i.e. without using the division in year as reference). Different solutions are possible ...
+
+### France
+
+```{r}
+# Load corpus
+sel<-qd_int_fr
+sel$quarter<-cut(sel$day,breaks="month")
+lang="fr"
+
+# Prepare tokens
+sel<-gsub(pattern = "'"," ",sel)
+sel<-gsub(pattern = "’"," ",sel)
+sel<-gsub(pattern = "-"," ",sel)
+sel<-gsub(pattern = "France"," ",sel)
+sel<-gsub(pattern = "Paris"," ",sel)
+sel<-gsub(pattern = "après"," ",sel)
+sel<-gsub(pattern = "plus"," ",sel)
+sel<-gsub(pattern = "Union Européenne","UE",sel)
+sel<-gsub(pattern = "Union européenne","UE",sel)
+sel<-gsub(pattern = "Etats Unis","USA",sel)
+sel<-gsub(pattern = "États Unis","USA",sel)
+sel<-gsub(pattern = "SOS Méditerranée","SOS_Méditerranée",sel)
+sel<-gsub(pattern = "Ocean Viking","Ocean_Viking",sel)
+sel<-gsub(pattern = "Emmanuel Macron","Macron",sel)
+sel<-gsub(pattern = "Royaume Uni","Royaume_Uni",sel)
+sel<-gsub(pattern = "von der Leyen","VDLeyen",sel)
+sel<-gsub(pattern = "Von der Leyen","VDLeyen",sel)
+sel<-gsub(pattern = "Theresa May","T_May",sel)
+
+# Automatic Compounds ?
+
+# create dfm by month with 100 top features
+toks<-tokens(sel,remove_separators = T,remove_punct = T,remove_symbols = T,remove_numbers = T,split_hyphens = T)
+dfmat<-dfm(toks,tolower = F) %>% dfm_remove(stopwords(language = lang)) %>% dfm_group(quarter) %>% dfm_sort()
+
+m<-as.matrix(dfmat)
+w<-apply(m,2,sum)
+m<-m[,1:100]
+w<-apply(m,2,sum)
+
+
+
+# AFC
+library(FactoMineR)
+library(explor)
+afc<-CA(m, graph = F)
+#explor(afc)
+
+# CAH
+cah<-HCPC(afc,nb.clust = 4)
+plot(cah)
+x<-cah$desc.var
+
+## Classe 1
+x1<-as.data.frame(x$`1`) %>% filter(v.test >2)
+kable(x1)
+
+## Classe2
+
+x2<-as.data.frame(x$`2`) %>% filter(v.test >2)
+kable(x2)
+
+# Classe 3
+x3<-as.data.frame(x$`3`) %>% filter(v.test >2)
+kable(x3)
+
+# Classe 4
+x4<-as.data.frame(x$`4`) %>% filter(v.test >2)
+kable(x4)
+
+x<-data.frame(month=as.factor(row.names(cah$data.clust)), class=cah$data.clust$clust,num=1)
+x<-x[order(x$month),]
+barplot(x$num~x$month, col=x$class)
+
+library(wordcloud)
+par(mfrow=c(2,2), mar=c(0,0,0,0))
+wordcloud(words = row.names(x3),freq = x3$`Glob freq `,rot.per = 0,max.words = 15)
+wordcloud(words = row.names(x1),freq = x1$`Glob freq `,rot.per = 0,max.words = 15)
+wordcloud(words = row.names(x2),freq = x2$`Glob freq `,rot.per = 0,max.words = 15)
+wordcloud(words = row.names(x4),freq = x4$`Glob freq `,rot.per = 0,max.words = 15)
+```
+
+
+### Tunisia
+
+```{r}
+# Load corpus
+sel<-qd_reg_tn
+lang="fr"
+
+# Prepare tokens
+sel<-gsub(pattern = "'"," ",sel)
+sel<-gsub(pattern = "’"," ",sel)
+sel<-gsub(pattern = "-"," ",sel)
+sel<-gsub(pattern = "Union Européenne","UE",sel)
+sel<-gsub(pattern = "Union européenne","UE",sel)
+sel<-gsub(pattern = "Etats Unis","USA",sel)
+sel<-gsub(pattern = "États Unis","USA",sel)
+sel<-gsub(pattern = "SOS Méditerranée","SOS_Méditerranée",sel)
+sel<-gsub(pattern = "Ocean Viking","Ocean_Viking",sel)
+sel<-gsub(pattern = "Emmanuel Macron","Macron",sel)
+sel<-gsub(pattern = "Royaume Uni","Royaume_Uni",sel)
+sel<-gsub(pattern = "von der Leyen","VDLeyen",sel)
+sel<-gsub(pattern = "Von der Leyen","VDLeyen",sel)
+sel<-gsub(pattern = "Theresa May","T_May",sel)
+
+# Automatic Compounds ?
+
+# create dfm by month with top features
+toks<-tokens(sel,remove_separators = T,remove_punct = T,remove_symbols = T,remove_numbers = T,split_hyphens = T)
+dfmat<-dfm(toks,tolower = F) %>% dfm_remove(stopwords(language = lang)) %>%  dfm_group(month) %>% dfm_sort()
+m<-as.matrix(dfmat)
+w<-apply(m,2,sum)
+m<-m[,w>10]
+w<-apply(m,2,sum)
+w
+
+
+# AFC
+library(FactoMineR)
+library(explor)
+afc<-CA(m, graph = F)
+#explor(afc)
+
+# CAH
+cah<-HCPC(afc,nb.clust = 3)
+
+x<-data.frame(date=as.Date(row.names(cah$data.clust)), class=cah$data.clust$clust,num=1)
+x<-x[order(x$date),]
+barplot(x$num~x$date, col=x$class,)
+
+```

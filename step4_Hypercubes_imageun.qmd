@@ -1,0 +1,271 @@
+---
+title: "Geographical analysis of media"
+subtitle: "4. Hypercubes"
+author: "Claude Grasland"
+format: html
+self-contained: true
+---
+
+
+```{r setup2, echo = FALSE, comment = FALSE, warning = FALSE, message = FALSE}
+knitr::opts_chunk$set(echo = TRUE, comment = FALSE, warning = FALSE)
+library(knitr)
+library(dplyr)
+library(quanteda)
+library(data.table)
+library(tidytext)
+```
+
+
+
+
+# Hypercubes
+
+
+This section is based on the TELEMAC application elaborated during the H2020 projected ODYCCEUS and presented in the paper published in the journal *Frontiers* and available at https://analytics.huma-num.fr/Claude.Grasland/telemac/ 
+
+Our objective is to elaborate an hypercubes organised by different dimensions. As an example, we suppose that we are interested in the analysis of the crisis of migrant and refugees (what) in different newspapers (who), at different period of time (when) and we want to explore the locations of countries that are mentioned (where) and eventually associated together (where1.where2). 
+
+In the case of ANR-DFG IMAGEUN project, we distinguish between two cases of "where" that can refer to "states" or "regions". For this reason we create a new function for the elaboration of hypercubes called *"octocubes"*. 
+
+## Definition of the dimensions
+
+
+To illustrate this different options, we can look at the example of a news published by the Tunisian newspaper African Manager the 14th November 2018.
+
+
+```{r examp1}
+qd<-readRDS("corpus/qd_mycorpus_geo_top.RDS")
+examp<-corpus_subset(qd,docid(qd) == "Factiva&TUN_afrman&2018-11-14&19" )
+summary(examp)
+kable(paste(examp))
+
+```
+
+
+Thanks to the previous operations of geographical and topical tagging, we can propose a simplified table where the text of the news has been removed and where we keep only the information of interest for the agregation procedure.
+
+```{r examp2}
+examp$id<-as.character(docid(examp))
+dtexamp<-data.table(tidy(examp)) %>% select(id=id, order = order, who = who, when=day,what=covid, states = states,  regions =regions)
+kable(dtexamp)
+
+```
+
+ 
+
+
+
+## Octocube function
+
+The elaboration of the octocube is based on the crossing of all dimensions with one line for each singular combination. To do that, we have elaborated a specific function that combine all the dimensions but can be easily adapted if less dimensions are needed. The two geographical dimensions (states and region) are duplicated in order to prepare data for network analysis of links between states, between regions or between states and regions.
+
+```{r}
+
+#' @title create an octocube
+#' @name octocube
+#' @description create a network of interlinked states and regions
+#' @param corpus a corpus of news in quanteda format
+#' @param order an order of sentences in the news
+#' @param who the source dimension
+#' @param when the time dimension
+#' @param timespan aggregation of time
+#' @param what a list of topics
+#' @param states a list of states
+#' @param regions  a list of states
+
+
+octocube   <- function( corpus = qd,
+                        order = "order",
+                        who = "source",
+                        when = "when",
+                        timespan = "week",
+                        what = "what",
+                        states = "states",
+                        regions = "regions")
+{
+
+
+  
+# prepare data
+
+  don<-docvars(corpus)
+  
+  df<-data.table(id     = docid(corpus),
+                 order  = don[[order]],
+                 who    = don[[who]],
+                 when   = don[[when]],
+                 what   = don[[what]],
+                 states1 = don[[states]],
+                 states2 = don[[states]],
+                 regions1 = don[[regions]],
+                 regions2 = don[[regions]])
+
+  # adjust id
+ df$id<-paste(df$id,"_",df$order,sep="")
+ 
+# change time span
+  df$when<-as.character(cut(as.Date(df$when), timespan, start.on.monday = TRUE))
+
+# change what
+  df$what[df$what==""]<-"_no_"
+   df<-unnest_tokens(df,what,what,to_lower=F)
+  
+# unnest states1
+  df$states1[df$states1==""]<-"_no_"
+  df<-unnest_tokens(df,states1,states1,to_lower=F)
+  
+# unnest states2
+  df$states2[df$states2==""]<-"_no_"
+  df<-unnest_tokens(df,states2,states2,to_lower=F) 
+  
+  
+# unnest regions1
+  df$regions1[df$regions1==""]<-"_no_"
+  df<-unnest_tokens(df,regions1,regions1,to_lower=F)
+  
+# unnest regions2
+  df$regions2[df$regions2==""]<-"_no_"
+  df<-unnest_tokens(df,regions2,regions2,to_lower=F) 
+  
+
+# Compute weight of news
+  newswgt<-df[,list(wgt=1/.N),list(id)]
+  df <- merge(df,newswgt, by="id")
+
+
+# ------------------------ Octocube creation --------------------#
+  
+  
+# Aggregate
+  hc<- df[,.(tags = .N, news=sum(wgt)) ,.(order,who, when,what, states1,states2, regions1,regions2)]
+  
+# Convert date to time
+  hc$when<-as.Date(hc$when)
+  
+# export
+  return(hc)
+  
+}
+
+```
+
+
+In order to test the function, we apply it firstly on our small example of the single news published by the African Manager
+
+```{r}
+octexamp<-octocube( corpus   = examp,
+                    order    = "order",
+                    who      = "who",
+                    when     = "when",
+                    timespan = "day",
+                    what     = "covid",
+                    states   = "states",
+                    regions   = "regions")
+kable(octexamp)
+```
+
+
+
+
+
+## Octocube creation
+
+Of course it is not interesting to transform a single news in such a large table. But it is of high interest if we realize the agregation on a large number of news. Because in this case the number of combination of dimensions is limited and we can obtain a synthetic table called hypercube that summarize all the information extracted from the news in a relatively small object. The time of computation of an hypercube can be relatively large and the memory size necessary to the intermediary step of disagregation can be important, but the resulting object is small and very adapted for a large number of exploration and modelisation methods.
+
+In practice, the function based on data.table package appears to be very fast as we can see in the following example 
+
+
+```{r}
+hc_day<-octocube( corpus   = qd,
+                    order    = "order",
+                    who      = "who",
+                    when     = "when",
+                    timespan = "day",
+                    what     = "covid",
+                    states   = "states",
+                    regions   = "regions")
+
+saveRDS(hc_day,"hypercubes/hc_mycorpus_covid_states_regions_day.RDS")
+paste("Size of resulting file = ",round(file.size("hypercubes/hc_mycorpus_covid_states_regions_day.RDS")/1000000,3), "Mo")
+```
+
+We can see that the resulting object is rather small (2.9 Mo) which will make easier the production of visualization based on the crossing of the different dimensions.
+
+If we want to work only at week level, the hypercube could be even smaller (1.9 Mo)
+
+```{r}
+hc_week<-octocube( corpus   = qd,
+                    order    = "order",
+                    who      = "who",
+                    when     = "when",
+                    timespan = "week",
+                    what     = "covid",
+                    states   = "states",
+                    regions   = "regions")
+
+saveRDS(hc_week,"hypercubes/hc_mycorpus_covid_states_regions_week.RDS")
+paste("Size of resulting file = ",round(file.size("hypercubes/hc_mycorpus_covid_states_regions_week.RDS")/1000000,3), "Mo")
+
+```
+
+...and even smaller at month level (1.31 Mo) ...
+
+```{r}
+hc_month<-octocube( corpus   = qd,
+                    order    = "order",
+                    who      = "who",
+                    when     = "when",
+                    timespan = "month",
+                    what     = "covid",
+                    states   = "states",
+                    regions   = "regions")
+
+saveRDS(hc_month,"hypercubes/hc_mycorpus_covid_states_regions_month.RDS")
+paste("Size of resulting file = ",round(file.size("hypercubes/hc_mycorpus_covid_states_regions_month.RDS")/1000000,3), "Mo")
+
+```
+
+...or at quarter level (0.97 Mo) ...
+
+```{r}
+hc_quarter<-octocube( corpus   = qd,
+                    order    = "order",
+                    who      = "who",
+                    when     = "when",
+                    timespan = "quarter",
+                    what     = "covid",
+                    states   = "states",
+                    regions   = "regions")
+
+saveRDS(hc_month,"hypercubes/hc_mycorpus_covid_states_regions_quarter.RDS")
+paste("Size of resulting file = ",round(file.size("hypercubes/hc_mycorpus_covid_states_regions_quarter.RDS")/1000000,3), "Mo")
+
+```
+
+
+... and finally at year level (0.67 Mo)
+
+```{r}
+hc_year<-octocube( corpus   = qd,
+                    order    = "order",
+                    who      = "who",
+                    when     = "when",
+                    timespan = "year",
+                    what     = "covid",
+                    states   = "states",
+                    regions   = "regions")
+
+saveRDS(hc_year,"hypercubes/hc_mycorpus_covid_states_regions_year.RDS")
+paste("Size of resulting file = ",round(file.size("hypercubes/hc_mycorpus_covid_states_regions_year.RDS")/1000000,3), "Mo")
+
+```
+
+
+If we anticipate that the figures will propose various choices of visualisation at different time scale (day, week, month, year), it can be interesting to store all the octocubes in one single object taking the form of a list with a total size of 7.7 Mo
+
+```{r}
+hc<-list("day"=hc_day,"week"=hc_week,"month"=hc_month, "quarter" =hc_quarter,"year"=hc_year)
+saveRDS(hc,"hypercubes/hc_mycorpus_covid_states_regions_multilevel.RDS")
+paste("Size of resulting file = ",round(file.size("hypercubes/hc_mycorpus_covid_states_regions_multilevel.RDS")/1000000,3), "Mo")
+```

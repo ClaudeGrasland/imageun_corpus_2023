@@ -1,0 +1,362 @@
+---
+title: "Geographical analysis of media"
+subtitle: "2. Tagging states and macroregions"
+author: "Claude Grasland"
+format: html
+self-contained: true
+---
+
+
+```{r setup2, echo = FALSE, comment = FALSE, warning = FALSE, message = FALSE}
+knitr::opts_chunk$set(echo = TRUE, comment = FALSE, warning = FALSE)
+library(knitr)
+library(dplyr)
+library(quanteda)
+library(stringr)
+```
+
+
+
+
+# Geographical tags
+
+The aim of this section is to add to the quanteda corpus different metadata related to the geographical entities that are mentioned in the news. We do not discuss here the problems related to the choice of a list of entities and we just apply a method of recognition based on a dictionary. We distinguish between three categories of geographical entities : 
+
+- states : recognized by a combination of country names or capital cities
+- geographical regions : based on continents or other "natural" features like sea, topography, biogeography, ...
+- international organizations ; based on a list established with wikipedia.
+
+More details on the methodology for the creation of dictionaries are discussed in the media cookbook. 
+
+
+## Preparation of data
+
+### Load list and definition of entities
+
+```{r load_entities}
+#Load dictionary
+ent<-read.csv2("dict/worldgeo_def_V2.csv")
+
+# Break by language
+ent_fr <- ent[ent$lang=="fr",-1]
+ent_de <- ent[ent$lang=="de",-1]
+ent_tr <- ent[ent$lang=="tr",-1]
+
+
+# Eliminate duplicated labels
+ent_fr <- ent_fr[duplicated(ent_fr)==F,]
+ent_fr <- ent_fr[duplicated(ent_fr$label)==F,]
+ent_fr <- ent_fr[duplicated(ent_fr$code)==F,]
+
+ent_de <- ent_de[duplicated(ent_de)==F,]
+ent_de <- ent_de[duplicated(ent_de$label)==F,]
+ent_de <- ent_de[duplicated(ent_de$code)==F,]
+
+ent_tr <- ent_tr[duplicated(ent_tr)==F,]
+ent_tr <- ent_tr[duplicated(ent_tr$label)==F,]
+ent_tr <- ent_tr[duplicated(ent_tr$code)==F,]
+
+# Visualize
+#head(ent)
+```
+
+
+
+### Load dictonary
+
+We start by loading the last version of the Imageun dictionary and we extract our target language for each languade
+
+```{r load_dict}
+#Load dictionary
+dict<-read.csv2("dict/worldgeo_dict_V5.csv")
+
+### FRENCH
+# Eliminate wikipedia codes
+dict_fr <- dict[dict$lang=="fr",-1]
+# Eliminate duplicated labels
+dict_fr <- dict_fr[duplicated(dict_fr)==F,]
+dict_fr <- dict_fr[duplicated(dict_fr$label)==F,]
+# Check if all codes are available
+dict_fr <- dict_fr[dict_fr$code %in% ent_fr$code,]
+
+### GERMAN
+# Eliminate wikipedia codes
+dict_de <- dict[dict$lang=="de",-1]
+# Eliminate duplicated labels
+dict_de <- dict_de[duplicated(dict_de)==F,]
+dict_de <- dict_de[duplicated(dict_de$label)==F,]
+# Check if all codes are available
+dict_de <- dict_de[dict_de$code %in% ent_de$code,]
+
+### TÜRKISH
+# Eliminate wikipedia codes
+dict_tr <- dict[dict$lang=="tr",-1]
+# Eliminate duplicated labels
+dict_tr <- dict_tr[duplicated(dict_tr)==F,]
+dict_tr <- dict_tr[duplicated(dict_tr$label)==F,]
+# Check if all codes are available
+dict_tr <- dict_tr[dict_tr$code %in% ent_tr$code,]
+
+
+# Visualize
+#head(dict)
+```
+
+### Load corpus and break by language
+
+
+```{r}
+qd <- readRDS("corpus/qd_mycorpus.RDS")
+qd_fr <- qd[qd$lang=="fr"]
+qd_de <- qd[qd$lang=="de"]
+qd_tr <- qd[qd$lang=="tr"]
+```
+
+### Load tagging function
+
+```{r func_annotate}
+extract_tags <- function(qd = qd,                      # the corpus of interest
+                         lang = "fr",                  # the language to be used
+                         dict = dict,                  # the dictionary of target 
+                         code = "id" ,                  # variable used for coding
+                         tagsname = "tags",                 # name of the tags column
+                         split  = c("'","’","-"),       # split list
+                         tolow = FALSE  ,                # Tokenize text
+                         comps = c("Afrique du sud")  # compounds
+                         )
+{ 
+
+
+  
+# Tokenize  
+x<-as.character(qd)
+
+
+if(length(split) > 0) { reg<-paste(split, collapse = '|')
+                       x <- gsub(reg," ",x)}  
+if(tolow) { x <- tolower(x)} 
+toks<-tokens(x)
+
+# compounds
+if(length(split) > 0) { reg<-paste(split, collapse = '|')
+                       comps<- gsub(reg," ",comps)}  
+if(tolow)       {comps <- tolower(comps)}  
+toks<-tokens_compound(toks,pattern=phrase(comps))
+
+  
+# Load dictionaries and create compounds
+
+  ## Target dictionary
+dict<-dict[dict$lang==lang & is.na(dict$label)==F,]
+target<-dict[ntoken(dict$label)>1,]
+labels <-dict$label
+if(length(split) > 0) { reg<-paste(split, collapse = '|')
+                       labels<- gsub(reg," ",labels)}  
+if(tolow)       {labels <- tolower(labels)}  
+toks<-tokens_compound(toks,pattern=phrase(labels))
+  
+ # create quanteda dictionary
+keys <-gsub(" ","_",labels)
+qd_dict<-as.list(keys)
+names(qd_dict)<-dict[[code]]
+qd_dict<-dictionary(qd_dict,tolower = FALSE)
+
+# Identify geo tags (states or reg or org ...)
+toks_tags <- tokens_lookup(toks, qd_dict, case_insensitive = F)
+toks_tags <- lapply(toks_tags, unique)
+toks_tags<-as.tokens(toks_tags)
+list_tags<-function(x){res<-paste(x, collapse=' ')}
+docvars(qd)[[tagsname]]<-as.character(lapply(toks_tags,FUN=list_tags))
+docvars(qd)[[paste("nb",tagsname,sep="")]]<-ntoken(toks_tags)
+
+
+
+# Export results
+return(qd)
+ }
+```
+
+
+
+## Geographical annotation
+
+### Annotate all entities
+
+In a first step, we annotate all geographic entities together in order to benefit from the cross-definition of their respective compounds. We will separate them by subcategories in a second step. Each language is done separately.
+
+#### French
+
+```{r annotate_fr, eval=FALSE}
+
+# Less than 5 minutes for the tagging of 3 millions of sentences on a good PC computer.  
+
+t1<-Sys.time()
+
+frcomps<-c("Europe 1", "Atlantic city", "Nantes-Atlantique",
+           "Loire-Atlantique", "Pyrénées-Atlantique", "Pyrénées-Atlantiques",
+           "Alpes-de-Haute-Provence", "Hautes-Alpes", "Rhône-Alpes","Alpes-Maritimes",
+           "Chantiers de l'Atlantique", "TGV Atlantique",
+           "Bourse de Paris", "Paris SG", "Ville de Paris", "Grand Paris")
+
+qd_fr <- extract_tags (qd = qd_fr,
+                     lang="fr",
+                     dict = dict_fr,
+                     code = "code",
+                     tagsname = "geo",
+                     split = c("'","’","-"),
+                     comps = frcomps,
+                     tolow = FALSE)
+
+t2 = Sys.time()
+paste("Program executed in ", t2-t1)
+
+table(qd_fr$nbgeo)
+
+
+
+
+
+```
+
+#### German
+
+```{r annotate_de, eval=FALSE}
+
+# Less than 5 minutes for the tagging of 3 millions of sentences on a good PC computer.  
+
+t1<-Sys.time()
+
+### to be modified ###
+frcomps<-c("Europa League")
+
+qd_de <- extract_tags (qd = qd_de,
+                     lang="de",
+                     dict = dict_de,
+                     code = "code",
+                     tagsname = "geo",
+                     split = c("'","’","-"),
+                     comps = frcomps,
+                     tolow = FALSE)
+
+t2 = Sys.time()
+paste("Program executed in ", t2-t1)
+
+table(qd_de$nbgeo)
+
+
+```
+
+#### Türkish
+
+```{r annotate_tr, eval=FALSE}
+
+# Less than 5 minutes for the tagging of 3 millions of sentences on a good PC computer.  
+
+t1<-Sys.time()
+
+### to be modified ###
+frcomps<-c("Europa League")
+
+qd_tr <- extract_tags (qd = qd_tr,
+                     lang="tr",
+                     dict = dict_tr,
+                     code = "code",
+                     tagsname = "geo",
+                     split = c("'","’","-"),
+                     comps = frcomps,
+                     tolow = FALSE)
+
+t2 = Sys.time()
+paste("Program executed in ", t2-t1)
+
+table(qd_tr$nbgeo)
+
+
+```
+
+#### Merge corpora back
+
+```{r}
+qd<-c(qd_fr,qd_de,qd_tr)
+```
+
+
+
+
+
+### Extract states codes
+
+```{r extract_states}
+state<-ent$code[ent$type %in% c("sta","cap")]
+test <- paste(state, collapse="|")
+x<-as.character(lapply(str_extract_all(qd$geo,paste(test, collapse = '|')), paste,collapse=" "))
+x<-gsub("ST_","",x)
+x<-gsub("CA_","",x)
+y<-tokens(x)
+y<-lapply(y, unique)
+list_tags<-function(x){res<-paste(x, collapse=' ')}
+docvars(qd)[["states"]]<-as.character(lapply(y,FUN=list_tags))
+docvars(qd)[["nbstates"]]<-ntoken(qd$states)
+
+summary(qd,3)
+```
+
+### check news with maximum state number
+
+```{r check_states_news}
+table(qd$nbstates)
+check<-corpus_subset(qd,nbstates>10)
+x<-data.frame(who=check$who,when = check$when,text=as.character(check),states=check$states,nbstates=check$nbstates)
+x<-x[order(x$nbstates,decreasing = T),]
+kable(x)
+```
+
+
+
+
+### Extract world region codes
+
+We do not distinguish so-called "geographical" regions (like "Europe") and "political" regions (like "European Union") and put them in the same catagory of world regions i.e. first level of organization under the world level and/or first level of agregation above state level.
+
+
+```{r extract_regions}
+table(ent$type)
+region<-ent$code[ent$type %in% c("sea","land","cont","org")]
+test <- paste(region, collapse="|")
+x<-as.character(lapply(str_extract_all(qd$geo,paste(test, collapse = '|')), paste,collapse=" "))
+y<-tokens(x)
+y<-lapply(y, unique)
+list_tags<-function(x){res<-paste(x, collapse=' ')}
+docvars(qd)[["regions"]]<-as.character(lapply(y,FUN=list_tags))
+docvars(qd)[["nbregions"]]<-ntoken(qd$regions)
+table(qd$nbregions)
+
+```
+
+### Check news with maximum number of world regions
+
+```{r check_regions_news}
+table(qd$nbregions)
+check<-corpus_subset(qd,nbregions>3)
+x<-data.frame(who=check$who,when = check$when,text=as.character(check),regions=check$regions,nbregions=check$nbregions)
+x<-x[order(x$nbregions,decreasing = T),]
+kable(x)
+```
+
+### Check news with mixtures of more than 2 states and more than 1 world regions
+
+```{r check_states_regions_news}
+
+check<-corpus_subset(qd,nbregions>1 & nbstates >2)
+x<-data.frame(who=check$who,when = check$when,text=as.character(check),geo=check$geo,nbstates=check$nbstates, nbregions = check$nbregions)
+x<-x[order(x$nbstates*x$nbregions,decreasing = T),]
+kable(x)
+```
+
+
+### Save geographically anotated corpus
+
+```{r}
+saveRDS(qd,"corpus/qd_mycorpus_geo.RDS")
+paste("Size of resulting file = ",round(file.size("corpus/qd_mycorpus_geo.RDS")/1000000,3), "Mo")
+```

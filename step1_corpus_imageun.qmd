@@ -1,0 +1,231 @@
+---
+title: "Geographical analysis of media"
+subtitle: "1. Corpus creation"
+author: "Claude Grasland"
+format: html
+self-contained: true
+---
+
+# Corpus preparation
+
+The aim of this section is to prepare a corpus of news related to a language and one or several  countries over a period of time. The data used in this example has been collected by the research project ANR Geomedia and are free to use for scientific and pedagogical purpose only. The content of the news should not be used or disseminated without the agreement of the newspapers.
+
+```{r}
+library(data.table)
+library(knitr)
+library(quanteda)
+library(ggplot2)
+library(stringi)
+library(stringr)
+```
+
+
+## Selection of media
+
+We import the data provided by each media and put them in a single data.frame. Then we select the columns of interest
+
+```{r corpus_load, eval=FALSE}
+
+df<-readRDS("corpus/imageun_corpus_2013_2023.RDS")
+
+
+# select column of interest
+df$id <- df$id
+df$who <- df$media
+df$when <- df$date
+df$text <- paste0(df$title,". ",df$text)
+df$lang <- df$lang
+df<-df[,c("id","who","when","text","lang")]
+
+# Transform in data.table
+df<-data.table(df)
+
+# Order by time period
+df<-df[order(when),]
+
+# select period of interest
+mintime<-as.Date("2013-04-01")
+maxtime<-as.Date("2023-03-31")
+df<-df[(is.na(df$when)==F),] 
+df<-df[as.Date(df$when) >= mintime,]
+df<-df[as.Date(df$when) <= maxtime,]
+
+# eliminate duplicate
+df<-df[duplicated(df$text)==F,]
+
+
+
+```
+
+
+## Check of time frequency
+
+
+### Time divisions
+
+We transform the previous data.frame in a data.table format for easier operations of aggregation 
+
+```{r time div}
+dt<-data.table(df)
+dt$day     <- as.Date(dt$when)
+dt$week    <- cut(dt$day, "weeks", start.on.monday=TRUE)
+dt$month   <- cut(dt$day, "months")
+dt$weekday <- weekdays(dt$day)
+
+# Save data frame
+saveRDS(dt,"corpus/dt_mycorpus.RDS") 
+```
+
+
+### News by week
+
+
+
+
+We examine if the distribution is regular by week for the different media of the corpus.
+
+```{r news_week_fr}
+news_weeks<-dt[,.(newstot=.N),by=.(week,who)]
+
+p<-ggplot(news_weeks, aes(x=as.Date(week),y=newstot, col=who))+
+   geom_line()+
+   geom_smooth(method = 'loess', formula = 'y~x')+
+   scale_y_continuous("Number of news", limits = c(0,NA)) +
+   scale_x_date("Week (starting on monday)") +
+         ggtitle(label ="Corpus : distribution of news by week",
+                  subtitle = "1st Jan 2013 to 31th Dec.  2022")
+p
+```
+
+### News by weekday
+
+We examine if the distribution is regular by weekday and check in particular the effect of the week-end.
+
+```{r news_weekdays_fr}
+#compute frequencies by weekday
+news_weekdays<-dt[,.(newstot=.N),by=.(weekday,who)]
+news_weekdays<-news_weekdays[,.(weekday,newspct=100*newstot/sum(newstot)),by=.(who)]
+
+
+# Translate weekdays in english and order
+news_weekdays$weekday<-as.factor(news_weekdays$weekday)
+levels(news_weekdays$weekday)
+levels(news_weekdays$weekday)<-c("5.Friday","1.Monday","6.Sathurday","7.Sunday","3.Thursday","2.Tuesday","4.Wednesday")
+news_weekdays$weekday<-as.factor(as.character(news_weekdays$weekday))
+news_weekdays<-news_weekdays[order(news_weekdays$weekday),]
+
+
+p<-ggplot(news_weekdays, aes(x=weekday,fill = who, y=newspct))+
+         geom_bar(position = "dodge", stat="identity")+
+         scale_y_continuous("Share of news (%)", limits = c(0,NA)) +
+         ggtitle(label ="Corpus : distribution of news by week day",
+                  subtitle = "1st Jan 2013 to 31th Dec.  2022")
+p
+```
+
+
+## Transform in quanteda corpus
+
+### Reshape news by sentences
+
+The aim of this step is to harmonize the length of texts collected through rss. We decide to keep only the title of news and the two first sentences of descriptions when they are available. The result is stored in quanteda format.
+
+Unfortunately, the division in text is sentences realized by quanteda is far from perfect which is due to problems in the collection of news. For example, the following text will be considered as a single sentence because the point is not followed by a blank character.
+
+>Le conflit est terminé.Mais la Russie est-elle d'accord avec la Turquie.
+
+
+ It is necessary to add a regular expression for the cleaning of text and the inclusion of a blank space " " after each point located after a lower case character and before an upper case character :
+ 
+str_replace_all(txt,"(?<=[:lower:])\\.(?=[:upper:])", "\\. ")
+
+In order to obtain a text that will be recognised as made of 2 sentences.
+
+>Le conflit est terminé. Mais la Russie est-elle d'accord avec la Turquie.
+
+Some sentences appears too short or too long for a sound analysis. Therefore, we decide to eliminate outliers based on the quantile of the numbe of tokens. In practice we decide to eliminate the sentences with more than 100 tokens or less than 3 tokensr
+
+```{r sent_fr, eval = FALSE}
+
+#dt<-readRDS("corpus/dt_mycorpus.RDS")
+
+t1<-Sys.time()
+
+# clean sentences break (long !)
+dt$text<-str_replace_all(dt$text,"(?<=[:lower:])\\.(?=[:upper:])", "\\. ")
+
+
+# transform in quanteda
+qd<-corpus(dt,docid_field = "id",text_field = "text")
+
+
+
+# break in sentences
+qd<-corpus_reshape(qd,to="sentences", use_docvars=T)
+
+# Identify rank of sentences
+qd$order<-as.numeric(as.data.frame(str_split(names(qd),"\\.", simplify=T))[,2])
+
+# Select only title + maximum of 3 sentences
+qd<-corpus_subset(qd, order < 4)
+
+# filter by number of tokens by sentence
+qd$nbt<-ntoken(texts(qd))
+#mintok<-quantile(qd$nbt,0.01)
+#maxtok<-quantile(qd$nbt,0.99)
+#qd<-corpus_subset(qd, nbt>mintok)
+qd<-corpus_subset(qd, nbt<100)
+qd<-corpus_subset(qd, nbt>2)
+
+
+
+# Save corpus in qd format
+saveRDS(qd,"corpus/qd_mycorpus.RDS")
+
+t2<-Sys.time()
+paste("Program executed in ", t2-t1)
+
+head(qd)
+summary(qd,3)
+```
+
+### Number of sentences by media
+
+We check the number of sentences available by title (1) and order of sentences in description (2 to 5)
+
+```{r sent_media_fr}
+#qd<-readRDS("corpus/qd_mycorpus.RDS")
+x<-data.table(docvars(qd))
+
+
+tab<-x[,.(tot=.N),by=.(who,order)]
+tab<-dcast(tab,order~who)
+tab$order<-as.factor(tab$order)
+levels(tab$order)<-c("Title","Sent1","Sent2","Sent3")
+kable(tab, caption = "Distribution of title and sentences by media")
+```
+
+### Size of texts by month
+
+We visualize the distribution of sentences of different order through time in order to prepare a decision on the length of text to be kept. 
+
+```{r sent_month_fr}
+
+tab<-x[,.(tot=.N),by=.(month,order,who)]
+tab$month<-as.Date(tab$month)
+tab$order<-as.factor(tab$order)
+levels(tab$order)<-c("Title","Sent1","Sent2","Sent3")
+
+       
+       p<-ggplot(tab, aes(x=month,fill = order, y=tot))+
+         geom_bar(stat="identity")+
+         ggtitle(label ="Corpus : distribution of titles and sentences by month",
+                  subtitle = "1st Jan 2013 to 31th Dec.  2022")+
+         scale_y_log10("nb of sentences")+
+         facet_wrap(facets=~who,nrow=2)
+p
+```
+
+
+
+

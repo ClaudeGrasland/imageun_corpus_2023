@@ -1,0 +1,742 @@
+---
+title: "Geographical Analysis of media"
+subtitle: "5. Widgets who what when where"
+author: "Claude Grasland"
+format: html
+self-contained: true
+---
+
+
+```{r setup5, echo = FALSE, comment = FALSE, warning = FALSE, message = FALSE}
+knitr::opts_chunk$set(echo = TRUE, comment = FALSE, warning = FALSE)
+library(sf)
+library(plotly)
+library(RColorBrewer)
+library(data.table)
+library(dplyr)
+library(knitr)
+library(htmlwidgets)
+
+#library(tidygraph)
+#library(ggraph)
+#library(visNetwork)
+```
+
+
+
+## Objective
+
+The aim of this section is to present the different widgets used for the exploration of hypercubes and developped during the ODYCCEUS project. We adapt a little the initial programs for the case of octocubes that are used in IMAGEUN but the principles remains the same. Each widget will export a dataframe and a plotly figure, making possible to store the results in javascript and/or to use the table for development with another software.
+
+
+
+## Preparation
+
+### Load multilevel octocubes and transform in hypercubes
+
+We load the octocubes at different levels of time agregation and transform them in hypercubes by removing the dual dimensions of states and regions. But we keep the order dimenson in order to be able to select only titles without description.
+
+```{r}
+base<-readRDS("hypercubes/hc_mycorpus_covid_states_regions_multilevel.RDS")
+hc_day<-base$day[,.(tag=sum(tags),news=sum(news)),.(order,who,what,when,states=states1,regions=regions1)]
+hc_week<-base$week[,.(tag=sum(tags),news=sum(news)),.(order,who,what,when,states=states1,regions=regions1)]
+hc_month<-base$month[,.(tag=sum(tags),news=sum(news)),.(order,who,what,when,states=states1,regions=regions1)]
+hc_quarter<-base$quarter[,.(tag=sum(tags),news=sum(news)),.(order,who,what,when,states=states1,regions=regions1)]
+hc_year<-base$year[,.(tag=sum(tags),news=sum(news)),.(order,who,what,when,states=states1,regions=regions1)]
+```
+
+
+### Load statistical test function
+
+```{r}
+#### ---------------- testchi2 ----------------
+#' @title  Compute the average salience of the topic and test significance of deviation
+#' @name what
+#' @description create a table and graphic of the topic
+#' @param tabtest a table with variable trial, success and null.value
+#' @param minsamp : Threshold of sample size requested for salience computation
+#' @param mintest : Threshold of estimated value requested for chi-square test
+
+
+testchi2<-function(tabtest=tabtest,
+                   minsamp = 20,
+                   mintest = 5) 
+{
+  tab<-tabtest
+  n<-dim(tab)[1]
+  
+  # Compute salience if sample size sufficient (default : N>20)
+  tab$estimate <-NA
+  tab$salience <-NA
+  tab$chi2<-NA
+  tab$p.value<-NA
+   tab$estimate<-round(tab$success/tab$trial,5)
+   tab$salience<-tab$estimate/tab$null.value
+  
+  # Chi-square test if estimated value sufficient (default : Nij* > 5)
+  
+  for (i in 1:n) {
+    if(tab$trial[i]*tab$null.value[i]>=mintest) {  
+      test<-prop.test(x=tab$success[i],n=tab$trial[i], p=tab$null.value[i], 
+                      alternative = "greater")
+      tab$chi2[i]<-round(test$statistic,2)
+      tab$p.value[i]<-round(test$p.value,5)
+    } 
+  }
+ # }
+  return(tab)
+}
+
+```
+
+## What
+
+
+### Function
+
+```{r}
+### ---------------- what ----------------
+#' @title  Compute the average salience of the topic
+#' @name what
+#' @description create a table and graphic of the topic
+#' @param hc an hypercube prepared as data.table
+#' @param subtop a subtag of the main tag (default = NA)
+#' @param title Title of the graphic
+
+
+what <- function (hc = hypercube,
+                  what = "what",
+                  subtop = NA,
+                  title = "What ?")
+{
+ 
+  
+tab<-hc
+tab$what<-tab[[what]]
+if (is.na(subtop)){tab$what <-tab$what !="_no_"}else {tab$what <- tab$what == subtop}
+
+tab<-tab[,list(news = sum(news)),by = what]
+tab$pct<-100*tab$news/sum(tab$news)
+
+p <- plot_ly(tab,
+             labels = ~what,
+             values = ~pct,
+             type = 'pie') %>%
+  layout(title = title,
+         xaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE),
+         yaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE))
+
+output<-list("table" = tab, "plotly" =p)
+
+return(output)
+
+}
+```
+
+### Application 1 : covid topic
+
+
+```{r}
+res<-what(hc_year)
+res$table
+res$plotly
+```
+
+
+### Application n°2 : state subtopic
+
+```{r}
+res <-hc_year %>% filter(states != "_no_") %>%
+what(what = "states",
+     subtop ="UKR",
+     title = "Share of Ukraine in international news")
+res$table
+res$plotly
+```
+
+### Application n°3 : macroregion subtopic
+
+```{r}
+res <-hc_year %>% filter(regions != "_no_") %>%
+what(what = "regions",
+     subtop ="OR_EU",
+     title = "Share of EU in macroregional news")
+res$table
+res$plotly
+```
+
+## Who.What
+
+### function
+
+```{r}
+#### ---------------- who.what ----------------
+#' @title  visualize variation of the topic between media
+#' @name who.what
+#' @description create a table of variation of the topic by media
+#' @param hc an hypercube prepared as data.table
+#' @param test : visualize test (TRUE) or salience (FALSE)
+#' @param minsamp : Threshold of sample size requested for salience computation
+#' @param mintest sample size of estimate for chi-square test (default = 5)
+#' @param title Title of the graphic
+
+
+who.what <- function (hc = hypercube,
+                      what = "what",
+                      subtop = NA,
+                      test = FALSE,
+                      minsamp = 20,
+                      mintest = 5,
+                      title = "Who says What ?")
+{
+  
+  tab<-hc
+  tab$what<-tab[[what]]
+if (is.na(subtop)){tab$what <-tab$what !="_no_"}else {tab$what <- tab$what == subtop}
+#  {tab$what <-tab$what !="_no_"}
+  
+  tab<-tab[,list(trial = sum(news),success=round(sum(news*what),0)),by = list(who)]
+  ref <-round(sum(tab$success)/sum(tab$trial),4)
+  tab$null.value<-ref
+  
+  tab<-testchi2(tabtest=tab,
+                minsamp = minsamp,
+                mintest = mintest)
+  
+  
+  
+  if (test==FALSE) {tab$index =tab$salience
+  tab$index[tab$index>4]<-4
+  tab<-tab[tab$trial > minsamp,]
+  mycol<-brewer.pal(7,"YlOrRd")
+  } 
+  else {tab$index=1-tab$p.value
+  tab<-tab[tab$trial*tab$null.value>mintest,]
+  mycol<-rev(brewer.pal(7,"RdYlBu"))
+  mycol[4]<-"lightyellow"
+  }
+  
+  p <- plot_ly(tab,
+               x = ~who,
+               y = ~estimate*100,
+               color= ~index,
+               colors= mycol,
+               hovertemplate = ~paste('Source: ',who,
+                             '<br /> Total news  : ', round(trial,0),
+                             '<br /> Topic news : ', round(success,0),
+                             '<br /> % observed  : ', round(estimate*100,2),'%',
+                             '<br /> % estimated : ', round(null.value*100,2),'%',
+                             '<br /> Salience : ', round(salience,2),  
+                             '<br /> p.value : ', round(p.value,4)),
+               type = "bar")  %>%
+    layout(title = title,
+           yaxis = list(title = "% news"),
+           barmode = 'stack')
+  
+  output<-list("table" = tab, "plotly" =p)
+  
+  return(output)
+  
+}
+```
+
+### Applicaton n°1 : Covid Topic
+
+An example of computation of the share of a non spatial topic (Covid) in the full sample of news during the years 2020 and 2021
+
+```{r, warning=F}
+res <- hc_year %>% 
+       filter(when >= as.Date("2020-01-01"), when <=as.Date("2021-12-31")) %>%
+ who.what( what = "what",
+           title = "Share of Covid in total news (2020-2021)",
+           test=TRUE)
+
+res$table
+res$plotly
+```
+
+- **Comment** : The share of news where the covid topic is present is significantly higher in the African Manager (16.4%)  as compared to the three other newspapers 8 to 9%) . 
+
+### Application n°2 : State subtopic
+
+An example of computation of the share of a national subtopic (Ukraine) in the sample of news where the topic is present (news with at least one state mentionned) since January 2021
+
+```{r, warning=F}
+res <-hc_year %>% filter(states != "_no_") %>%
+                filter(when >= as.Date("2022-01-01")) %>%
+
+who.what(what = "states",
+     subtop ="UKR",
+     title = "Share of Ukraine in international news 2022-2023",
+     test=TRUE)
+res$table
+res$plotly
+```
+
+- **Comment** : The share of international news where the Ukraine topic is present is significantly higher in the Süddeutche Zeitung  (26.2%) and to a lesser extent in Le Figaro (12.6%)  as compared to the level observed in the two other newspapers 6 to 7%) . 
+
+
+### Application n°3 : Macroregion subtopic
+
+Same example applied to macroregion : what is the share of the subtopic European Union in the subsample news where at least one macroregion is mentionned for the whole period 2013-2023
+
+```{r, warning = F}
+res <-hc_year %>% filter(regions != "_no_") %>%
+who.what(what = "regions",
+     subtop ="OR_EU",
+     title = "Share of EU in macroregional news (2013-2023)",
+     test=TRUE)
+res$table
+res$plotly
+
+```
+
+- **Comment** : The share of macroregional news where European Union is mentionned is significantly higher in Süddeutsche Zeitung (47.5%) as compared to the three other newspapers (22 to 27%)
+
+## When.What
+
+### function
+```{r}
+
+#### ---------------- when.what ----------------
+#' @title  visualize variation of the topic through time
+#' @name when.what
+#' @description create a table of variation of the topic by media
+#' @param test : visualize test (TRUE) or salience (FALSE)
+#' @param minsamp : Threshold of sample size requested for salience computation
+#' @param mintest sample size of estimate for chi-square test (default = 5)
+#' @param title Title of the graphic
+
+
+when.what <- function (hc = hypercube,
+                       what = "what",
+                       subtop = NA,
+                       test = FALSE,
+                       minsamp = 20,
+                       mintest = 5,
+                       title = "When is said What ?")
+{
+  
+  tab<-hc
+  tab$what<-tab[[what]]
+if (is.na(subtop)){tab$what <-tab$what !="_no_"}else {tab$what <- tab$what == subtop}
+#  {tab$what <-tab$what !="_no_"}
+  
+  tab<-tab[,list(trial = sum(news),success=round(sum(news*what),0)),by = list(when)]
+  ref <-round(sum(tab$success)/sum(tab$trial),4)
+  tab$null.value<-ref
+  
+  tab<-testchi2(tabtest=tab,
+                minsamp = minsamp,
+                mintest = mintest)
+  tab<-tab[order(when),]
+  
+  if (test==FALSE) {tab$index =tab$salience
+  tab<-tab[tab$trial > minsamp,]
+  mycol<-brewer.pal(7,"YlOrRd")
+  } 
+  else {tab$index=tab$p.value
+  tab<-tab[tab$trial*tab$null.value>mintest,]
+  mycol<-brewer.pal(7,"RdYlBu")
+  mycol[4]<-"lightyellow"
+  }
+  
+  
+  p <- plot_ly(tab,
+               x = ~as.character(when),
+               y = ~estimate*100,
+               color= ~index,
+               colors= mycol,
+     #          hoverinfo = "text",
+               hovertemplate = ~paste('Time: ',when,
+                             '<br /> Total news  : ', round(trial,0),
+                             '<br /> Topic news : ', round(success,0),
+                             '<br /> % observed  : ', round(estimate*100,2),'%',
+                             '<br /> % estimated : ', round(null.value*100,2),'%',
+                             '<br /> Salience : ', round(salience,2),  
+                             '<br /> p.value : ', round(p.value,4)),
+               type = "bar")  %>%
+    layout(title = title,
+           yaxis = list(title = "% news"),
+           barmode = 'stack')
+  
+  output<-list("table" = tab, "plotly" =p)
+  
+  return(output)
+  
+}
+```
+
+
+
+### Applicaton n°1 : Covid Topic
+
+An example of computation of the share of a non spatial topic (Covid) in the full sample of news by week for one media in 2020-2021
+
+```{r, warning = F}
+res <- hc_week %>% filter(who=="DEU_suddeu") %>%
+                   filter(when >= as.Date("2020-01-01"), when <=as.Date("2021-12-31")) %>%
+when.what(what = "what",
+     title = "Share of Covid-19 topic in news published by Süddeutsche Zeitung (2020-21)",
+     test=TRUE)
+
+head(res$table)
+res$plotly
+```
+
+
+
+### Application n°2 : State subtopic
+
+Example of analysis of the share of news about Ukraine among news mentionning one country, by week, for Le Figaro in 2022
+
+```{r, warning = F}
+res <-hc_week %>% filter(states != "_no_") %>%  
+                   filter(who=="FRA_figaro") %>%
+#                   filter(when >= as.Date("2022-01-01")) %>%
+when.what(what = "states",
+     subtop ="UKR",
+     title = "Share of Ukraine in international news published by Le Figaro ",
+     test=TRUE)
+head(res$table)
+res$plotly
+```
+
+### Application n°3 : Macroregion subtopic
+
+Example of analysis of the share of news about European news among news mentioning one macroregion, by quarter, for Dunya during the whole period
+
+```{r, warning = F}
+res <-hc_month %>% filter(regions != "_no_") %>%  filter(who=="TUR_dunya") %>%
+when.what(what = "regions",
+     subtop ="OR_EU",
+     title = "Share of EU in macroregional news published by Dunya (2013-2023)",
+     test=TRUE)
+head(res$table)
+res$plotly
+```
+
+
+## Where.What
+
+### function
+```{r}
+
+#### ---------------- where.what ----------------
+#' @title  visualize spatialization of the topic 
+#' @name where.what
+#' @description create a table of variation of the topic by media
+#' @param hc an hypercube prepared as data.table
+#' @param test : visualize test (TRUE) or salience (FALSE)
+#' @param minsamp : Threshold of sample size requested for salience computation
+#' @param mintest sample size of estimate for chi-square test (default = 5)
+#' @param map a map with coordinates in lat-long
+#' @param proj a projection accepted by plotly
+#' @param title Title of the graphic
+
+
+where.what <- function (hc = hypercube,
+                        what = "what",
+                        where = "where",
+                        subtop = NA,
+                        test = FALSE,
+                        minsamp = 20,
+                        mintest = 5,
+                        map = world_ctr,
+                        proj = 'azimuthal equal area',
+                        title = "Where said What ?")
+{
+ 
+  tab<-hc
+  tab$what<-tab[[what]]
+  tab$where<-tab[[where]]
+if (is.na(subtop)){tab$what <-tab$what !="_no_"}else {tab$what <- tab$what == subtop}
+#  {tab$what <-tab$what !="_no_"}
+  
+  tab<-tab[,list(trial = round(sum(news),0),success=round(sum(news*what),0)),by = list(where)]
+  ref <-round(sum(tab$success)/sum(tab$trial),4)
+  tab$null.value<-ref
+  
+  tab<-testchi2(tabtest=tab,
+                minsamp = minsamp,
+                mintest = mintest)
+  
+  
+  
+  tab<-tab[order(-chi2),]
+  
+  
+  
+  if (test==FALSE) {tab$index =tab$salience
+  tab<-tab[tab$trial > minsamp,]
+  mycol<-brewer.pal(7,"YlOrRd")
+  } else {tab$index=tab$p.value
+  tab<-tab[tab$trial*tab$null.value>mintest,]
+  mycol<-brewer.pal(7,"RdYlBu")
+  mycol[4]<-"lightyellow"
+  }
+  
+  
+  map<-merge(map,tab,all.x=T,all.y=F,by.x="ISO3",by.y="where")
+  
+  
+  
+  #map2<-map[is.na(map$pct)==F,]
+  #map2<-st_centroid(map2)
+  #map2<-st_drop_geometry(map2)
+  
+  
+  g <- list(showframe = TRUE,
+            framecolor= toRGB("gray20"),
+            coastlinecolor = toRGB("gray20"),
+            showland = TRUE,
+            landcolor = toRGB("gray50"),
+            showcountries = TRUE,
+            countrycolor = toRGB("white"),
+            countrywidth = 0.2,
+            projection = list(type = proj))
+  
+  
+  
+  p<- plot_geo(map)%>%
+    add_markers(x = ~lon,
+                y = ~lat,
+                sizes = c(0, 250),
+                size = ~success,
+                #             color= ~signif,
+                color = ~index,
+                colors= mycol,
+#                hoverinfo = "text",
+                hovertemplate = ~paste('Location: ',NAME,
+                              '<br /> Total news  : ', round(trial,0),
+                              '<br /> Topic news : ', round(success,0),
+                              '<br /> % observed  : ', round(estimate*100,2),'%',
+                              '<br /> % estimated : ', round(null.value*100,2),'%',
+                              '<br /> Salience : ', round(salience,2),  
+                              '<br /> p.value : ', round(p.value,4))) %>%
+    
+    layout(geo = g,
+           title = title)
+  
+  
+  
+  output<-list("table" = tab, "plotly" =p)
+  
+  return(output)
+  
+}
+
+```
+
+
+### Applicaton n°1 : Covid Topic
+
+An example of computation of the share of a non spatial topic (Covid) in the full sample of news by week for one media.
+
+```{r, warning=F}
+world_ctr<-readRDS("map/world_ctr_4326.Rdata")
+res <- hc_week %>% filter(who=="DEU_suddeu") %>%
+                  filter(states != "DEU") %>%
+                    filter(states != "_no_") %>%
+                   filter(when >= as.Date("2020-01-01"), when <=as.Date("2021-12-31")) %>%
+where.what(what = "what",
+           where ="states",
+     title = "Share of Covid-19 topic in foreign news published by Süddeutsche Zeitung in 2020-2021",
+     minsamp = 5,
+     mintest = 2,
+     test=TRUE)
+
+#res$table
+res$plotly
+```
+
+
+### Application n°2 : National subtopic
+
+Impossible to use state as subtopic in this case
+
+
+
+### Application n°3 : Regional subtopic
+
+Example of analysis of the share of news about Africa in news associated to one country
+
+```{r}
+
+res <-hc_quarter %>% filter(regions != "_no_") %>% 
+             filter(who=="TUR_dunya") %>%
+             filter(states!="TUR") %>%
+where.what(what = "regions",
+           subtop = "OR_EU",
+           where = "states",
+           title = "Share of EU in macroregional news published by Dunya (2013-2023)", 
+            test=TRUE,
+           mintest=1,
+           minsamp=5)
+head(res$table)
+
+res$plotly
+
+```
+
+
+
+## when.who.what
+
+### function
+
+```{r}
+
+#### ---------------- when.who.what ----------------
+#' @title  visualize variation of the topic by media through time
+#' @name when.who.what
+#' @description create a table of variation of the topic by media through time
+#' @param hc an hypercube prepared as data.table
+#' @param test : visualize test (TRUE) or salience (FALSE)
+#' @param minsamp : Threshold of sample size requested for salience computation
+#' @param mintest sample size of estimate for chi-square test (default = 5)
+#' @param title Title of the graphic
+
+
+when.who.what <- function (hc = hypercube,
+                           what = "what",
+                           subtop = NA,
+                           test = FALSE,
+                           minsamp = 20,
+                           mintest = 5,
+                           title = "What by Whom and When ?")
+{
+  
+  tab<-hc
+  tab$what<-tab[[what]]
+if (is.na(subtop)){tab$what <-tab$what !="_no_"}else {tab$what <- tab$what == subtop}
+#  {tab$what <-tab$what !="_no_"}
+  tab<-tab[is.na(when)==F,]
+  
+  
+  
+  tab<-tab[,list(trial = sum(news),success=round(sum(news*what),0)),by = list(when,who)]
+  ref<-tab[,list(null.value = round(sum(success)/sum(trial),4)), by = list(who)]
+  tab<-merge(tab,ref,by="who")
+  
+  tab<-testchi2(tabtest=tab,
+                minsamp = minsamp,
+                mintest = mintest)
+  
+  
+  if (test==FALSE) {tab$index =tab$salience
+  tab<-tab[tab$trial > minsamp,]
+  mycol<-brewer.pal(7,"YlOrRd")
+  } 
+  else {tab$index=tab$p.value
+  tab<-tab[tab$trial*tab$null.value>mintest,]
+  mycol<-brewer.pal(7,"RdYlBu")
+  mycol[4]<-"lightyellow"
+  }
+  
+  
+  
+  p <- plot_ly(tab,
+               x = ~when,
+               y = ~who,
+               z= ~index,
+               sizes = c(0, 250),
+               size = ~success,
+               colors= mycol,
+               hovertext = ~paste( 'Total news  : ', round(trial,0),
+                             '<br /> Topic news : ', round(success,0),
+                             '<br /> % observed  : ', round(estimate*100,2),'%',
+                             '<br /> % estimated : ', round(null.value*100,2),'%',
+                             '<br /> Salience : ', round(salience,2),  
+                             '<br /> p.value : ', round(p.value,4)),
+               #  name = ~tags,
+               type = "heatmap")  %>%
+
+    layout(title = title,
+           yaxis = list(title = "media"),
+           xaxis = list(title = "time"))
+  p
+  
+  
+  
+  output<-list("table" = tab, "plotly" =p)
+  
+  return(output)
+  
+}
+
+```
+
+
+### Applicaton n°1 : Covid Topic 
+
+An example of computation of the share of a non spatial topic (Covid) in the full sample of news by week for one media.
+
+```{r, warning=F}
+res <- hc_week %>% filter(when >= as.Date("2019-01-01"), when <=as.Date("2022-12-31")) %>%
+when.who.what(what = "what",
+     title = "Share of Covid-19 topic in news published by newspapers (2019-2022)",
+     test=TRUE)
+
+head(res$table)
+res$plotly
+
+
+```
+
+### Applicaton n°2 : Ukraine in international news (by week)
+
+How many news about Ukraine in international news (i.e. news mentioning at least one country) ?
+
+```{r, warning = F}
+res <-hc_month %>% filter(states != "_no_") %>%  
+                   filter(states != substr(who,1,3)) %>%
+when.who.what(what = "states",
+              subtop="UKR",
+     title = "Share of Ukraine in international news (2013-2023)",
+     minsamp = 5,
+     mintest = 1,
+     test=TRUE)
+head(res$table)
+res$plotly
+
+
+```
+
+
+
+### Applicaton n°3 : EU in macroregional news (by quarter)
+
+How many news about EU in macroregional  news (i.e. news mentioning at least one macroregion) ?
+
+```{r, warning = F}
+res <- hc_month %>% filter(regions !="_no_") %>%
+when.who.what(what = "regions", subtop="OR_EU",
+     title = "Share of EU in macroregional news",
+     minsamp = 5,
+     mintest = 2,
+     test=TRUE)
+head(res)
+res$plotly
+
+
+```
+
+### Applicaton n°3bis : NATO in macroregional news (by year)
+
+How many news about EU in macroregional  news (i.e. news mentioning at least one macroregion) ?
+
+```{r, warning = F}
+res <- hc_year %>% filter(regions !="_no_") %>%
+when.who.what(what = "regions", subtop="OR_NATO",
+     title = "Share of NATO in macroregional news",
+     minsamp = 5,
+     mintest = 2,
+     test=TRUE)
+head(res)
+res$plotly
+
+
+```
+
+
