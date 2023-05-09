@@ -51,6 +51,7 @@ qd_de <- corpus_subset(qd, who=="DEU_suddeu")
 qd_tr <- corpus_subset(qd, who=="TUR_dunya")
 qd_tn <- corpus_subset(qd, who=="TUN_afrman")
 td<-tidy(qd)
+summary(td$when)
 ```
 
 
@@ -98,10 +99,10 @@ sel<-gsub(pattern = "Union européenne","UE",sel)
 sel<-gsub(pattern = "Tunisie"," ",sel)
 stopw<-stopwords("fr", source = "stopwords-iso")
 dfm<- corpus_subset(sel) %>% 
-    dfm(remove = stopw, remove_punct = TRUE, tolower=F) %>%
+    dfm(remove = stopw, remove_punct = TRUE, tolower=F, remove_numbers =T) %>%
     dfm_trim(min_termfreq = 10, verbose = FALSE)
 set.seed(100)
-textplot_wordcloud(dfm,max_words = 100,min_size=1, max_size=10, rotation=0)
+textplot_wordcloud(dfm,max_words = 80,min_size=1, max_size=8, rotation=0,min_count = 50)
 ```
 
 
@@ -120,7 +121,7 @@ dfm<- corpus_subset(sel) %>%
     dfm(remove = stopw, remove_punct = TRUE, tolower=F) %>%
     dfm_trim(min_termfreq = 10, verbose = FALSE,)
 set.seed(100)
-textplot_wordcloud(dfm,max_words = 100,min_size=1, max_size=12, rotation=0)
+textplot_wordcloud(dfm,max_words = 75,min_size=1, max_size=8, rotation=0,min_count = 50)
 ```
 
 
@@ -139,7 +140,7 @@ dfm<- corpus_subset(sel) %>%
     dfm(remove = stopw, remove_punct = TRUE, tolower=F) %>%
     dfm_trim(min_termfreq = 10, verbose = FALSE,)
 set.seed(100)
-textplot_wordcloud(dfm,max_words = 100,min_size=1, max_size=12, rotation=0)
+textplot_wordcloud(dfm,max_words = 75,min_size=1, max_size=8, rotation=0)
 ```
 
 ### Turkey / Dunya
@@ -153,10 +154,10 @@ sel<-gsub(pattern = "Avrupa Birliği","AB",sel)
 sel<-gsub(pattern = "Türkiye"," ",sel)
 stopw<-stopwords("tr", source = "stopwords-iso")
 dfm<- corpus_subset(sel) %>% 
-    dfm(remove = stopw, remove_punct = TRUE, tolower=F) %>%
+    dfm(remove = stopw, remove_punct = TRUE, tolower=F, remove_numbers=T) %>%
     dfm_trim(min_termfreq = 10, verbose = FALSE,)
 set.seed(100)
-textplot_wordcloud(dfm,max_words = 100,min_size=1, max_size=10, rotation=0)
+textplot_wordcloud(dfm,max_words = 75,min_size=1, max_size=8, rotation=0)
 td<-tidy(sel)
 
 ```
@@ -196,7 +197,7 @@ pres_dfm <- tokens(sel, remove_punct = TRUE) %>%
 result_keyness <- textstat_keyness(pres_dfm, target = "TRUE")
 
 # Plot estimated word keyness
-textplot_keyness(result_keyness,min_count = 20,n = 20,show_reference = T)
+textplot_keyness(result_keyness,min_count = 20,n = 20,show_reference = F)
 td<-tidy(sel)
 ```
 
@@ -229,7 +230,7 @@ pres_dfm <- tokens(sel, remove_punct = TRUE) %>%
 result_keyness <- textstat_keyness(pres_dfm, target = "TRUE")
 
 # Plot estimated word keyness
-textplot_keyness(result_keyness,min_count = 20,n = 20,show_reference = T)
+textplot_keyness(result_keyness,min_count = 20,n = 20,show_reference = F)
 td<-tidy(sel)
 ```
 
@@ -262,7 +263,7 @@ pres_dfm <- tokens(sel, remove_punct = TRUE) %>%
 result_keyness <- textstat_keyness(pres_dfm, target = "TRUE")
 
 # Plot estimated word keyness
-textplot_keyness(result_keyness,min_count = 20,n = 20,show_reference = T)
+textplot_keyness(result_keyness,min_count = 20,n = 20,show_reference = F)
 td<-tidy(sel)
 ```
 
@@ -297,7 +298,7 @@ pres_dfm <- tokens(sel, remove_punct = TRUE) %>%
 result_keyness <- textstat_keyness(pres_dfm, target = "TRUE")
 
 # Plot estimated word keyness
-textplot_keyness(result_keyness,min_count = 20,n = 20,show_reference = T)
+textplot_keyness(result_keyness,min_count = 20,n = 20,show_reference = F)
 td<-tidy(sel)
 ```
 
@@ -639,7 +640,7 @@ tokens_remove(c("Europe","UE","19","2019","150")) %>%
 result_keyness <- textstat_keyness(pres_dfm, sel = "2018-19")
 
 # Plot estimated word keyness
-textplot_keyness(result_keyness,min_count = 5,n = 20,show_reference = T)
+textplot_keyness(result_keyness,min_count = 5,n = 10,show_reference = T)
 td<-tidy(sel)
 ```
 
@@ -682,7 +683,7 @@ pres_dfm <- tokens(sel, remove_punct = TRUE) %>%
 result_keyness <- textstat_keyness(pres_dfm, sel = "2018-19")
 
 # Plot estimated word keyness
-textplot_keyness(result_keyness,min_count = 10,n = 20,show_reference = T)
+textplot_keyness(result_keyness,min_count = 10,n = 10,show_reference = T)
 td<-tidy(sel)
 ```
 
@@ -720,7 +721,7 @@ pres_dfm <- tokens(sel, remove_punct = TRUE) %>%
 result_keyness <- textstat_keyness(pres_dfm, sel="2018-19")
 
 # Plot estimated word keyness
-textplot_keyness(result_keyness,min_count = 10,n = 20,show_reference = T)
+textplot_keyness(result_keyness,min_count = 10,n = 10,show_reference = T)
 td<-tidy(sel)
 ```
 
@@ -754,7 +755,7 @@ table(sel$ref)
 
 
 # Create a dfm grouped by presence/absence of the macroregion
-pres_dfm <- tokens(sel, remove_punct = TRUE) %>%
+pres_dfm <- tokens(sel, remove_punct = TRUE, remove_numbers = T) %>%
   tokens_remove(stopw) %>%
   tokens_remove(c("AB","den","nın","nin","ye","2022","2021","3","e")) %>%
   tokens_group(groups = ref) %>%
@@ -764,7 +765,7 @@ pres_dfm <- tokens(sel, remove_punct = TRUE) %>%
 result_keyness <- textstat_keyness(pres_dfm, sel="2018-19")
 
 # Plot estimated word keyness
-textplot_keyness(result_keyness,min_count = 10,n = 20,show_reference = T)
+textplot_keyness(result_keyness,min_count = 10,n = 10,show_reference = T)
 td<-tidy(sel)
 ```
 
@@ -853,53 +854,3 @@ wordcloud(words = row.names(x2),freq = x2$`Glob freq `,rot.per = 0,max.words = 1
 wordcloud(words = row.names(x4),freq = x4$`Glob freq `,rot.per = 0,max.words = 15)
 ```
 
-
-### Tunisia
-
-```{r}
-# Load corpus
-sel<-qd_reg_tn
-lang="fr"
-
-# Prepare tokens
-sel<-gsub(pattern = "'"," ",sel)
-sel<-gsub(pattern = "’"," ",sel)
-sel<-gsub(pattern = "-"," ",sel)
-sel<-gsub(pattern = "Union Européenne","UE",sel)
-sel<-gsub(pattern = "Union européenne","UE",sel)
-sel<-gsub(pattern = "Etats Unis","USA",sel)
-sel<-gsub(pattern = "États Unis","USA",sel)
-sel<-gsub(pattern = "SOS Méditerranée","SOS_Méditerranée",sel)
-sel<-gsub(pattern = "Ocean Viking","Ocean_Viking",sel)
-sel<-gsub(pattern = "Emmanuel Macron","Macron",sel)
-sel<-gsub(pattern = "Royaume Uni","Royaume_Uni",sel)
-sel<-gsub(pattern = "von der Leyen","VDLeyen",sel)
-sel<-gsub(pattern = "Von der Leyen","VDLeyen",sel)
-sel<-gsub(pattern = "Theresa May","T_May",sel)
-
-# Automatic Compounds ?
-
-# create dfm by month with top features
-toks<-tokens(sel,remove_separators = T,remove_punct = T,remove_symbols = T,remove_numbers = T,split_hyphens = T)
-dfmat<-dfm(toks,tolower = F) %>% dfm_remove(stopwords(language = lang)) %>%  dfm_group(month) %>% dfm_sort()
-m<-as.matrix(dfmat)
-w<-apply(m,2,sum)
-m<-m[,w>10]
-w<-apply(m,2,sum)
-w
-
-
-# AFC
-library(FactoMineR)
-library(explor)
-afc<-CA(m, graph = F)
-#explor(afc)
-
-# CAH
-cah<-HCPC(afc,nb.clust = 3)
-
-x<-data.frame(date=as.Date(row.names(cah$data.clust)), class=cah$data.clust$clust,num=1)
-x<-x[order(x$date),]
-barplot(x$num~x$date, col=x$class,)
-
-```

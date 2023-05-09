@@ -1,0 +1,188 @@
+---
+title: "Mediterraneum"
+subtitle: "Nominalist / Realist"
+author: "Claude Grasland"
+format: html
+self-contained: true
+---
+
+
+
+
+```{r}
+library(data.table)
+library(knitr)
+library(quanteda)
+library(quanteda.textstats)
+library(quanteda.textplots)
+library(ggplot2)
+library(stringi)
+library(stringr)
+library(dplyr)
+library(tidytext)
+```
+
+
+## NOMINALIST
+
+We import the data provided by each media and put them in a single data.frame. Then we select the columns of interest
+
+```{r corpus_load, eval=FALSE}
+
+df<-readRDS("corpus/imageun_corpus_2013_2023.RDS")
+
+
+# select column of interest
+df$id <- df$id
+df$who <- df$media
+df$when <- df$date
+df$text <- paste0(df$title,". ",df$text)
+df$lang <- df$lang
+df<-df[,c("id","who","when","text","lang")]
+
+# Transform in data.table
+df<-data.table(df)
+
+# Order by time period
+df<-df[order(when),]
+
+# select period of interest
+mintime<-as.Date("2013-04-01")
+maxtime<-as.Date("2023-03-31")
+df<-df[(is.na(df$when)==F),] 
+df<-df[as.Date(df$when) >= mintime,]
+df<-df[as.Date(df$when) <= maxtime,]
+
+# eliminate duplicate
+df<-df[duplicated(df$text)==F,]
+
+
+
+```
+
+
+
+
+
+
+### African Manager
+
+
+```{r}
+
+sel<-df %>% filter(who == "TUN_a")
+qd<-corpus(sel,docid_field = "id",text_field = "text")
+med<-str_detect(qd,"méditerr*|mediterr|Méditerr*|Mediterr")
+qdmed<-corpus_subset(qd,med)
+qdmed<-tolower(qdmed)
+toks<-tokens(qdmed,remove_punct = T,remove_symbols = T,remove_numbers =T,remove_separators = T)
+head(toks)
+col <- textstat_collocations(toks, min_count = 5, tolower = F,size = 2)
+col<-col[str_detect(col$collocation,"méditerr*|Méditerr|mediterr"),]
+col<-col %>% arrange(-count)
+col2<-col[c(1,2,3,6,7,8,9,13,14),c(1,2,5,6)]
+kable(col2,row.names = F,digits=c(0,0,2,2))
+
+
+x<-tidy(qd)
+```
+
+
+
+
+
+### Le Figaro
+
+
+```{r}
+
+sel<-df %>% filter(who == "FRA_figaro")
+qd<-corpus(sel,docid_field = "id",text_field = "text")
+med<-str_detect(qd,"méditerr*|mediterr|Méditerr*|Mediterr")
+qdmed<-corpus_subset(qd,med)
+qdmed<-tolower(qdmed)
+toks<-tokens(qdmed,remove_punct = T,remove_symbols = T,remove_numbers =T,remove_separators = T)
+head(toks)
+col <- textstat_collocations(toks, min_count = 5, tolower = F,size = 2:4)
+col<-col[str_detect(col$collocation,"méditerr*|Méditerr|mediterr"),]
+col<-col %>% arrange(-z)
+col2<-col[c(1,2,4,6,7,8,9,11,12,26,31,43),c(1,2,5,6)]
+kable(col2,row.names = F,digits=c(0,0,2,2))
+
+
+x<-tidy(qd)
+```
+
+
+
+
+
+### Süddeutsche Zeitung
+
+
+```{r}
+
+sel<-df %>% filter(who == "DEU_suddeu")
+qd<-corpus(sel,docid_field = "id",text_field = "text")
+med<-str_detect(qd,"mittelmeer*|Mittelmeer*")
+qdmed<-corpus_subset(qd,med)
+qdmed<-tolower(qdmed)
+toks<-tokens(qdmed,remove_punct = T,remove_symbols = T,remove_numbers =T,remove_separators = T)
+#toks<-tokens_remove(toks,stopwords("de"))
+head(toks)
+col <- textstat_collocations(toks, min_count = 5, tolower = F,size = 2:4)
+col<-col[str_detect(col$collocation,"mittelmeer*|Mitteleer*"),]
+col<-col %>% arrange(-count)
+col2<-col[c(1,2,3,4,5,6,7,9,10,11,20,25,27),c(1,2,5,6)]
+kable(col2,row.names = F,digits=c(0,0,2,2))
+
+
+x<-tidy(qd)
+```
+
+
+
+
+### Dunya
+
+
+```{r}
+
+sel<-df %>% filter(who == "TUR_dunya")
+qd<-corpus(sel,docid_field = "id",text_field = "text")
+med<-str_detect(qd,"Akdeniz*|akdeniz*")
+qdmed<-corpus_subset(qd,med)
+#qdmed<-tolower(qdmed)
+toks<-tokens(qdmed,remove_punct = T,remove_symbols = T,remove_numbers =T,remove_separators = T)
+#toks<-tokens_remove(toks,stopwords("de"))
+head(toks)
+col <- textstat_collocations(toks, min_count = 5, tolower = F,size = 2:5)
+col<-col[str_detect(col$collocation,"Akdeniz*|akdeniz*"),]
+col<-col %>% arrange(-count)
+col2<-col[c(1,2,3,4,5,6,7,9,10,11,20,25,27),c(1,2,5,6)]
+kable(col2,row.names = F,digits=c(0,0,2,2))
+
+
+x<-tidy(qd)
+```
+
+## REALIST
+
+
+```{r}
+hc<-readRDS("hypercubes/hc_mycorpus_covid_states_regions_month.RDS")
+hc$tag<-hc$regions1=="SE_medit"
+table(hc$tag)
+tab<-hc[,.(tot=.N,med=sum(tag)),.(who,when)]
+tab$pct<-100*tab$med/tab$tot
+tab$when<-as.Date(tab$when)+15
+       
+       p<-ggplot(tab, aes(x=when, y=pct))+
+         geom_bar(stat="identity",fill="red")+
+         ggtitle(label ="Frequency of news mentioning the 'Mediterranean'",
+                  subtitle = "1st Jan 2013 to 31th Dec. 2022")+
+         scale_y_continuous("% of news")+
+         facet_wrap(facets=~who,nrow=2)
+p
+```
+
