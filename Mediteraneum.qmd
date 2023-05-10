@@ -171,7 +171,7 @@ x<-tidy(qd)
 
 ```{r}
 hc<-readRDS("hypercubes/hc_mycorpus_covid_states_regions_month.RDS")
-hc$tag<-hc$regions1=="SE_medit"
+hc$tag<-hc$states1 %in% c("UKR")
 table(hc$tag)
 tab<-hc[,.(tot=.N,med=sum(tag)),.(who,when)]
 tab$pct<-100*tab$med/tab$tot
@@ -179,7 +179,7 @@ tab$when<-as.Date(tab$when)+15
        
        p<-ggplot(tab, aes(x=when, y=pct))+
          geom_bar(stat="identity",fill="red")+
-         ggtitle(label ="Frequency of news mentioning the 'Mediterranean'",
+         ggtitle(label ="Frequency of news mentioning Ukraine",
                   subtitle = "1st Jan 2013 to 31th Dec. 2022")+
          scale_y_continuous("% of news")+
          facet_wrap(facets=~who,nrow=2)

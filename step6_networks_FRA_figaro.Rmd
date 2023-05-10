@@ -256,55 +256,13 @@ net
 ## Analyse networks
 
 
-### Regions x Regions / Le Monde
+### 4 media
 ```{r}
 #hc<-hc_geo_geo %>% filter(substr(where1,1,3) %in% c("CO_","SE_","LA_","OR_")) %>%
 #                            filter(substr(where2,1,3) %in% c("CO_","SE_","LA_","OR_")) %>% 
 #                            filter(who == "FRA_lmonde")
 
-
-
-hc<-hc_filter(don = hc,
-                             wgt = "tags",
-                             where1 = "geofr1",
-                             where2 = "geofr2",
-                             where1_exc = c("_no_"),
-                             where2_exc = c("_no_"),
-                             self = FALSE
-                           )
-
-int <- build_int(don = hc,
-                 s1=2,
-                 s2=2,
-                 n1=2,
-                 n2=2,
-                 k=0)
-
-mod<-rand_int(int,
-              resid = TRUE,
-              diag = FALSE)
-
-sum(mod$Fij)
-network<- geo_network(mod,
-                      size = "Fij",
-                      minsize = sum(mod$Fij/1000),
-                      test = "Rchi_ij",
-                      mintest = 3.84)
-network
-
-
-visSave(network, "regions_states_fr.html")
-```
-
-
-
-### regions x Regions / Le Figaro
-```{r}
-hc<-hc_geo_geo %>% filter(substr(where1,1,3) %in% c("CO_","SE_","LA_","OR_")) %>%
-                            filter(substr(where2,1,3) %in% c("CO_","SE_","LA_","OR_")) %>% 
-                            filter(who == "FRA_figaro")
-
-
+hc<-hc_geo_geo
 
 hc<-hc_filter(don = hc,
                              wgt = "tags",
@@ -335,14 +293,14 @@ network<- geo_network(mod,
 network
 
 
-visSave(network, "regions_regions_figaro.html")
+visSave(network, "regions_states_ALL.html")
 ```
 
-### regions x Regions / La Croix
+
+
+### Figaro
 ```{r}
-hc<-hc_geo_geo %>% filter(substr(where1,1,3) %in% c("CO_","SE_","LA_","OR_")) %>%
-                            filter(substr(where2,1,3) %in% c("CO_","SE_","LA_","OR_")) %>% 
-                            filter(who == "FRA_figaro")
+hc<-hc_geo_geo %>% filter(who == "FRA_figaro") %>% filter(states1 !="FRA")
 
 
 
@@ -369,95 +327,13 @@ mod<-rand_int(int,
 sum(mod$Fij)
 network<- geo_network(mod,
                       size = "Fij",
-                      minsize = sum(mod$Fij/1000),
+                      minsize = sum(mod$Fij/500),
                       test = "Rchi_ij",
                       mintest = 3.84)
 network
 
 
-visSave(network, "regions_regions_lacroi.html")
-```
-
-### regions x Regions / Libération
-```{r}
-hc<-hc_geo_geo %>% filter(substr(where1,1,3) %in% c("CO_","SE_","LA_","OR_")) %>%
-                            filter(substr(where2,1,3) %in% c("CO_","SE_","LA_","OR_")) %>% 
-                            filter(who == "FRA_libera")
-
-
-
-hc<-hc_filter(don = hc,
-                             wgt = "tags",
-                             where1 = "geofr1",
-                             where2 = "geofr2",
-                             where1_exc = c("_no_"),
-                             where2_exc = c("_no_"),
-                             self = FALSE
-                           )
-
-int <- build_int(don = hc,
-                 s1=2,
-                 s2=2,
-                 n1=2,
-                 n2=2,
-                 k=0)
-
-mod<-rand_int(int,
-              resid = TRUE,
-              diag = FALSE)
-
-sum(mod$Fij)
-network<- geo_network(mod,
-                      size = "Fij",
-                      minsize = sum(mod$Fij/1000),
-                      test = "Rchi_ij",
-                      mintest = 3.84)
-network
-
-
-visSave(network, "regions_regions_libera.html")
-```
-
-
-### States x Regions / 4 medias
-```{r}
-hc<-hc_geo_geo %>% filter(!(substr(where1,1,3) %in% c("CO_","SE_","LA_","OR_"))) %>%
-                            filter(substr(where2,1,3) %in% c("CO_","SE_","LA_","OR_")) 
-
-
-
-
-hc<-hc_filter(don = hc,
-                             wgt = "tags",
-                             where1 = "geofr1",
-                             where2 = "geofr2",
-                             where1_exc = c("_no_", "France"),
-                             where2_exc = c("_no_"),
-                             self = FALSE
-                           )
-
-int <- build_int(don = hc,
-                 s1=2,
-                 s2=2,
-                 n1=2,
-                 n2=2,
-                 k=0)
-
-mod<-rand_int(int,
-              resid = TRUE,
-              diag = FALSE)
-
-sum(mod$Fij)
-network<- geo_network(mod,
-                      size = "Fij",
-                      minsize = sum(mod$Fij/1000),
-                      test = "Rchi_ij",
-                      mintest = 3.84,
-                      loops = TRUE)
-network
-
-
-visSave(network, "states_regions_FRA.html")
+visSave(network, "regions_states_FRA_figaro.html")
 ```
 
 
